@@ -320,7 +320,6 @@ export default function CheatScreen() {
           <View style={styles.itemsList}>
             {selectedCheatDay.items.map(normalizeItem).map((item, index) => {
               const info = item.tag ? getTagInfo(item.tag) : null;
-              const shouldShowTagLabel = item.tag && info && !isSameLabel(item.text, info.label);
               return (
                 <View key={index} style={[
                   styles.itemChip,
@@ -328,11 +327,6 @@ export default function CheatScreen() {
                 ]}>
                   {info && <Ionicons name={info.icon} size={12} color={info.color} />}
                   <Text style={[styles.itemText, info && { color: info.color }]}>{item.text}</Text>
-                  {shouldShowTagLabel && (
-                    <Text style={[styles.itemTag, { color: info?.color || COLORS.textMuted }]}>
-                      {info?.label}
-                    </Text>
-                  )}
                   <TouchableOpacity
                     onPress={() => confirmDeleteItem(index)}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}

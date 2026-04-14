@@ -10,14 +10,14 @@ import Svg, { Polyline, Circle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts } from '../storage/storage';
-import { COLORS } from '../utils/theme';
+import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 
 function Sparkline({ data, width = 80, height = 36 }) {
   if (data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
-  const pad = 3;
+  const pad = 4;
   const points = data
     .map((v, i) => {
       const x = pad + (i / (data.length - 1)) * (width - pad * 2);
@@ -35,8 +35,9 @@ function Sparkline({ data, width = 80, height = 36 }) {
         strokeWidth="2"
         strokeLinejoin="round"
         strokeLinecap="round"
+        opacity={0.7}
       />
-      <Circle cx={last[0]} cy={last[1]} r="3" fill={COLORS.primary} />
+      <Circle cx={last[0]} cy={last[1]} r="3.5" fill={COLORS.primary} />
     </Svg>
   );
 }
@@ -74,28 +75,52 @@ export default function ProgressScreen({ navigation }) {
       item.weights.length > 1
         ? item.weights[item.weights.length - 1] - item.weights[item.weights.length - 2]
         : 0;
+    const trendUp = trend > 0;
+    const trendDown = trend < 0;
 
     return (
       <TouchableOpacity
         style={styles.card}
         onPress={() => navigation.navigate('ProgressDetail', { exerciseName: item.name })}
-        activeOpacity={0.8}
+        activeOpacity={0.75}
       >
         <View style={styles.cardLeft}>
           <Text style={styles.exerciseName}>{item.name}</Text>
-          <Text style={styles.statsText}>
-            {item.sessions} session{item.sessions !== 1 ? 's' : ''}
-            {item.maxWeight > 0 ? ` · Best: ${item.maxWeight}kg` : ''}
-          </Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statPill}>
+              <Ionicons name="repeat-outline" size={11} color={COLORS.textMuted} />
+              <Text style={styles.statPillText}>
+                {item.sessions} session{item.sessions !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            {item.maxWeight > 0 && (
+              <View style={styles.statPill}>
+                <Ionicons name="trophy-outline" size={11} color={COLORS.highlight} />
+                <Text style={[styles.statPillText, { color: COLORS.highlight }]}>
+                  {item.maxWeight} lbs
+                </Text>
+              </View>
+            )}
+          </View>
           {item.weights.length > 1 && (
-            <Text style={[styles.trendText, { color: trend >= 0 ? COLORS.success : COLORS.danger }]}>
-              {trend >= 0 ? '▲' : '▼'} {Math.abs(trend)}kg vs last
-            </Text>
+            <View style={styles.trendRow}>
+              <Ionicons
+                name={trendUp ? 'arrow-up' : trendDown ? 'arrow-down' : 'remove'}
+                size={12}
+                color={trendUp ? COLORS.success : trendDown ? COLORS.danger : COLORS.textMuted}
+              />
+              <Text style={[
+                styles.trendText,
+                { color: trendUp ? COLORS.success : trendDown ? COLORS.danger : COLORS.textMuted },
+              ]}>
+                {Math.abs(trend)} lbs vs last
+              </Text>
+            </View>
           )}
         </View>
         <View style={styles.cardRight}>
           <Sparkline data={item.weights} />
-          <Ionicons name="chevron-forward" size={14} color={COLORS.textMuted} style={{ marginTop: 4 }} />
+          <Ionicons name="chevron-forward" size={13} color={COLORS.textMuted} style={{ marginTop: 6 }} />
         </View>
       </TouchableOpacity>
     );
@@ -108,11 +133,14 @@ export default function ProgressScreen({ navigation }) {
         keyExtractor={(item) => item.name}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="trending-up-outline" size={48} color={COLORS.textMuted} />
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="trending-up-outline" size={36} color={COLORS.textMuted} />
+            </View>
             <Text style={styles.emptyText}>No data yet</Text>
-            <Text style={styles.emptySubText}>Log workouts to see progress</Text>
+            <Text style={styles.emptySubText}>Log workouts to see your progress here</Text>
           </View>
         }
       />
@@ -122,24 +150,56 @@ export default function ProgressScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  list: { padding: 16 },
+  list: { padding: LAYOUT.screenPadding, paddingBottom: 20 },
+
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: LAYOUT.cardRadius,
+    padding: 14,
     marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: COLORS.border,
+    ...SHADOWS.soft,
   },
-  cardLeft: { gap: 4, flex: 1 },
-  cardRight: { alignItems: 'center', gap: 2, marginLeft: 12 },
-  exerciseName: { color: COLORS.text, fontSize: 16, fontWeight: '600' },
-  statsText: { color: COLORS.textSecondary, fontSize: 13 },
+  cardLeft: { gap: 6, flex: 1 },
+  cardRight: { alignItems: 'center', gap: 4, marginLeft: 12 },
+
+  exerciseName: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
+
+  statsRow: { flexDirection: 'row', gap: 6 },
+  statPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: LAYOUT.pillRadius,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statPillText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '500' },
+
+  trendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   trendText: { fontSize: 12, fontWeight: '600' },
-  empty: { alignItems: 'center', marginTop: 80, gap: 8 },
-  emptyText: { color: COLORS.textSecondary, fontSize: 17, fontWeight: '600' },
-  emptySubText: { color: COLORS.textMuted, fontSize: 14 },
+
+  empty: { alignItems: 'center', marginTop: 80, gap: 10 },
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyText: { color: COLORS.text, fontSize: 18, fontWeight: '700' },
+  emptySubText: { color: COLORS.textMuted, fontSize: 14, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
 });

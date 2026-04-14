@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,9 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { saveWorkout } from '../storage/storage';
+import { saveWorkout, getWorkouts } from '../storage/storage';
 import { generateId, getTodayString, formatDate } from '../utils/helpers';
-import { COLORS } from '../utils/theme';
+import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 
 const QUICK_EXERCISES = [
   'Barbell Row', 'Bench Press', 'Bicep Curls', 'Deadlift',
@@ -25,14 +25,37 @@ export default function LogWorkoutScreen({ navigation }) {
   const [exercises, setExercises] = useState([]);
   const [showInput, setShowInput] = useState(false);
   const [newName, setNewName] = useState('');
+  const scrollRef = useRef(null);
   const today = getTodayString();
 
-  const addExercise = (name) => {
+  const addExercise = async (name) => {
     const trimmed = name.trim();
     if (!trimmed) return;
+
+    // Look up the most recent sets for this exercise to pre-populate
+    let previousSets = [];
+    try {
+      const allWorkouts = await getWorkouts();
+      const sorted = [...allWorkouts].sort((a, b) => b.date.localeCompare(a.date));
+      for (const workout of sorted) {
+        const match = workout.exercises.find(
+          (e) => e.name.trim().toLowerCase() === trimmed.toLowerCase()
+        );
+        if (match && match.sets.length > 0) {
+          previousSets = match.sets.map((s) => ({
+            weight: s.weight > 0 ? String(s.weight) : '',
+            reps: s.reps > 0 ? String(s.reps) : '',
+          }));
+          break;
+        }
+      }
+    } catch (_) {
+      // If lookup fails, just start with empty sets
+    }
+
     setExercises((prev) => [
       ...prev,
-      { id: generateId(), name: trimmed, sets: [] },
+      { id: generateId(), name: trimmed, sets: previousSets },
     ]);
     setNewName('');
     setShowInput(false);
@@ -99,25 +122,38 @@ export default function LogWorkoutScreen({ navigation }) {
       keyboardVerticalOffset={90}
     >
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.dateHeading}>{formatDate(today)}</Text>
+        {/* Date header */}
+        <View style={styles.dateHeader}>
+          <Ionicons name="calendar-outline" size={14} color={COLORS.textMuted} />
+          <Text style={styles.dateHeading}>{formatDate(today)}</Text>
+        </View>
 
         {exercises.map((exercise) => (
           <View key={exercise.id} style={styles.exerciseCard}>
             <View style={styles.exerciseHeader}>
-              <Text style={styles.exerciseName}>{exercise.name}</Text>
-              <TouchableOpacity onPress={() => removeExercise(exercise.id)}>
-                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+              <View style={styles.exerciseNameRow}>
+                <View style={styles.exerciseAccent} />
+                <Text style={styles.exerciseName}>{exercise.name}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => removeExercise(exercise.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.removeExBtn}
+              >
+                <Ionicons name="close" size={16} color={COLORS.textMuted} />
               </TouchableOpacity>
             </View>
 
             {exercise.sets.length > 0 && (
               <View style={styles.setsTableHeader}>
                 <Text style={[styles.colLabel, styles.colSet]}>SET</Text>
-                <Text style={[styles.colLabel, styles.colWeight]}>KG</Text>
+                <Text style={[styles.colLabel, styles.colWeight]}>LBS</Text>
                 <Text style={[styles.colLabel, styles.colReps]}>REPS</Text>
                 <View style={styles.colDelete} />
               </View>
@@ -125,7 +161,9 @@ export default function LogWorkoutScreen({ navigation }) {
 
             {exercise.sets.map((set, si) => (
               <View key={si} style={styles.setRow}>
-                <Text style={[styles.setNum, styles.colSet]}>{si + 1}</Text>
+                <View style={[styles.setNumWrap, styles.colSet]}>
+                  <Text style={styles.setNum}>{si + 1}</Text>
+                </View>
                 <TextInput
                   style={[styles.setInput, styles.colWeight]}
                   placeholder="0"
@@ -134,6 +172,7 @@ export default function LogWorkoutScreen({ navigation }) {
                   value={set.weight}
                   onChangeText={(v) => updateSet(exercise.id, si, 'weight', v)}
                   returnKeyType="next"
+                  selectTextOnFocus
                 />
                 <TextInput
                   style={[styles.setInput, styles.colReps]}
@@ -142,18 +181,21 @@ export default function LogWorkoutScreen({ navigation }) {
                   keyboardType="number-pad"
                   value={set.reps}
                   onChangeText={(v) => updateSet(exercise.id, si, 'reps', v)}
+                  selectTextOnFocus
                 />
                 <TouchableOpacity
-                  style={styles.colDelete}
+                  style={[styles.colDelete, styles.removeSetBtn]}
                   onPress={() => removeSet(exercise.id, si)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="remove-circle-outline" size={18} color={COLORS.textMuted} />
+                  <Ionicons name="remove-circle-outline" size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
             ))}
 
-            <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exercise.id)}>
-              <Text style={styles.addSetText}>+ Add Set</Text>
+            <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exercise.id)} activeOpacity={0.7}>
+              <Ionicons name="add" size={15} color={COLORS.primary} />
+              <Text style={styles.addSetText}>Add Set</Text>
             </TouchableOpacity>
           </View>
         ))}
@@ -174,31 +216,39 @@ export default function LogWorkoutScreen({ navigation }) {
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.quickList}
-              contentContainerStyle={{ gap: 8 }}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}
               keyboardShouldPersistTaps="always"
             >
               {QUICK_EXERCISES.map((name) => (
                 <TouchableOpacity
                   key={name}
-                  style={styles.quickChip}
+                  style={[
+                    styles.quickChip,
+                    newName === name && styles.quickChipActive,
+                  ]}
                   onPress={() => addExercise(name)}
                 >
-                  <Text style={styles.quickChipText}>{name}</Text>
+                  <Text style={[
+                    styles.quickChipText,
+                    newName === name && styles.quickChipTextActive,
+                  ]}>
+                    {name}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
             <View style={styles.inputRow}>
               <TouchableOpacity
-                style={[styles.inputBtn, styles.inputBtnPrimary]}
-                onPress={() => addExercise(newName)}
-              >
-                <Text style={styles.inputBtnPrimaryText}>Add</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
                 style={styles.inputBtn}
                 onPress={() => { setShowInput(false); setNewName(''); }}
               >
                 <Text style={styles.inputBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.inputBtn, styles.inputBtnPrimary]}
+                onPress={() => addExercise(newName)}
+              >
+                <Text style={styles.inputBtnPrimaryText}>Add</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -206,15 +256,22 @@ export default function LogWorkoutScreen({ navigation }) {
           <TouchableOpacity
             style={styles.addExerciseBtn}
             onPress={() => setShowInput(true)}
+            activeOpacity={0.7}
           >
-            <Ionicons name="add" size={20} color={COLORS.primary} />
+            <Ionicons name="add-circle-outline" size={20} color={COLORS.primary} />
             <Text style={styles.addExerciseText}>Add Exercise</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+        {exercises.length > 0 && (
+          <Text style={styles.footerMeta}>
+            {exercises.length} exercise{exercises.length !== 1 ? 's' : ''} · {exercises.reduce((n, ex) => n + ex.sets.length, 0)} sets
+          </Text>
+        )}
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+          <Ionicons name="checkmark" size={20} color="#fff" />
           <Text style={styles.saveBtnText}>Save Workout</Text>
         </TouchableOpacity>
       </View>
@@ -225,142 +282,221 @@ export default function LogWorkoutScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 120 },
+  scrollContent: { padding: LAYOUT.screenPadding, paddingBottom: 130 },
+
+  dateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 18,
+  },
   dateHeading: {
     color: COLORS.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 16,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
+
   exerciseCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: LAYOUT.cardRadius,
     marginBottom: 12,
     padding: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
+    ...SHADOWS.soft,
   },
   exerciseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+  },
+  exerciseNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  exerciseAccent: {
+    width: 3,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: COLORS.primary,
   },
   exerciseName: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
+  removeExBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   setsTableHeader: {
     flexDirection: 'row',
-    marginBottom: 4,
-    paddingHorizontal: 4,
+    marginBottom: 6,
+    paddingHorizontal: 2,
+    alignItems: 'center',
   },
   colLabel: {
     color: COLORS.textMuted,
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  colSet: { width: 36 },
-  colWeight: { flex: 1 },
-  colReps: { flex: 1 },
+  colSet: { width: 38 },
+  colWeight: { flex: 1, marginRight: 8 },
+  colReps: { flex: 1, marginRight: 8 },
   colDelete: { width: 32, alignItems: 'center' },
+
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
+  },
+  setNumWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   setNum: {
     color: COLORS.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
   setInput: {
     backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: COLORS.text,
     fontSize: 16,
-    marginRight: 8,
+    fontWeight: '600',
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  addSetBtn: {
-    marginTop: 6,
-    paddingVertical: 8,
+  removeSetBtn: {
     alignItems: 'center',
-    borderRadius: 8,
+    justifyContent: 'center',
+  },
+
+  addSetBtn: {
+    marginTop: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderStyle: 'dashed',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
   },
   addSetText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
+
   inputCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: LAYOUT.cardRadius,
     padding: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.primary,
     marginBottom: 12,
-    gap: 10,
+    gap: 12,
+    ...SHADOWS.soft,
   },
   nameInput: {
     backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     color: COLORS.text,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   quickList: { marginHorizontal: -4 },
   quickChip: {
     backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: LAYOUT.pillRadius,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  quickChipText: { color: COLORS.textSecondary, fontSize: 13 },
+  quickChipActive: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  quickChipText: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '500' },
+  quickChipTextActive: { color: COLORS.primary, fontWeight: '700' },
+
   inputRow: { flexDirection: 'row', gap: 8 },
   inputBtn: {
     flex: 1,
-    paddingVertical: 11,
+    paddingVertical: 12,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  inputBtnPrimary: { backgroundColor: COLORS.primary },
-  inputBtnText: { color: COLORS.textSecondary, fontWeight: '600' },
-  inputBtnPrimaryText: { color: '#fff', fontWeight: '700' },
+  inputBtnPrimary: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  inputBtnText: { color: COLORS.textSecondary, fontWeight: '600', fontSize: 15 },
+  inputBtnPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+
   addExerciseBtn: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: LAYOUT.cardRadius,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderStyle: 'dashed',
-    paddingVertical: 16,
+    paddingVertical: 18,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
   },
   addExerciseText: { color: COLORS.primary, fontSize: 16, fontWeight: '700' },
+
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: 12,
+    paddingBottom: 28,
     backgroundColor: COLORS.background,
-    borderTopWidth: 1,
+    borderTopWidth: 0.5,
     borderTopColor: COLORS.border,
+    gap: 8,
+  },
+  footerMeta: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   saveBtn: {
     backgroundColor: COLORS.primary,
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 15,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   saveBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });

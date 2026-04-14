@@ -8,9 +8,10 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
+import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts } from '../storage/storage';
-import { formatDateShort } from '../utils/helpers';
-import { COLORS } from '../utils/theme';
+import { formatDateShort, formatDate } from '../utils/helpers';
+import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -25,9 +26,9 @@ export default function ProgressDetailScreen({ route }) {
           .filter((w) => w.exercises.some((ex) => ex.name === exerciseName))
           .map((w) => {
             const ex = w.exercises.find((e) => e.name === exerciseName);
-            const maxWeight = Math.max(...ex.sets.map((s) => s.weight || 0));
+            const maxWeight = Math.max(...ex.sets.map((s) => parseFloat(s.weight) || 0));
             const totalVol = ex.sets.reduce(
-              (sum, s) => sum + (s.weight || 0) * (s.reps || 0),
+              (sum, s) => sum + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0),
               0
             );
             return { date: w.date, maxWeight, totalVol, sets: ex.sets };
@@ -40,8 +41,12 @@ export default function ProgressDetailScreen({ route }) {
 
   if (dataPoints.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.noData}>No data for {exerciseName}</Text>
+      <View style={[styles.container, styles.centerContent]}>
+        <View style={styles.emptyIconWrap}>
+          <Ionicons name="barbell-outline" size={36} color={COLORS.textMuted} />
+        </View>
+        <Text style={styles.emptyTitle}>No data yet</Text>
+        <Text style={styles.emptySubText}>Log {exerciseName} to see your progress</Text>
       </View>
     );
   }
@@ -49,68 +54,110 @@ export default function ProgressDetailScreen({ route }) {
   const last = dataPoints[dataPoints.length - 1];
   const prev = dataPoints.length > 1 ? dataPoints[dataPoints.length - 2] : null;
   const delta = prev ? last.maxWeight - prev.maxWeight : 0;
+  const deltaPositive = delta > 0;
+  const deltaNeutral = delta === 0;
 
   const chartLabels = dataPoints.map((d) => formatDateShort(d.date));
-  const chartData = dataPoints.map((d) => d.maxWeight);
+  const chartData = dataPoints.map((d) => d.maxWeight || 0);
+
+  const thinLabels = chartLabels.length > 6
+    ? chartLabels.map((l, i) => (i % Math.ceil(chartLabels.length / 6) === 0 ? l : ''))
+    : chartLabels;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Stat cards */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{last.maxWeight}kg</Text>
+          <Ionicons name="trophy-outline" size={18} color={COLORS.highlight} style={styles.statIcon} />
+          <Text style={styles.statValue}>{last.maxWeight} lbs</Text>
           <Text style={styles.statLabel}>Best Weight</Text>
         </View>
+
         <View style={styles.statCard}>
-          <Text style={[styles.statValue, { color: delta >= 0 ? COLORS.success : COLORS.danger }]}>
-            {delta >= 0 ? '+' : ''}{delta}kg
+          <Ionicons
+            name={deltaPositive ? 'arrow-up-circle-outline' : deltaNeutral ? 'remove-circle-outline' : 'arrow-down-circle-outline'}
+            size={18}
+            color={deltaPositive ? COLORS.success : deltaNeutral ? COLORS.textMuted : COLORS.danger}
+            style={styles.statIcon}
+          />
+          <Text style={[
+            styles.statValue,
+            { color: deltaPositive ? COLORS.success : deltaNeutral ? COLORS.textSecondary : COLORS.danger },
+          ]}>
+            {delta >= 0 ? '+' : ''}{delta} lbs
           </Text>
           <Text style={styles.statLabel}>vs Last Session</Text>
         </View>
+
         <View style={styles.statCard}>
+          <Ionicons name="layers-outline" size={18} color={COLORS.secondary} style={styles.statIcon} />
           <Text style={styles.statValue}>{dataPoints.length}</Text>
           <Text style={styles.statLabel}>Sessions</Text>
         </View>
       </View>
 
+      {/* Chart */}
       {chartData.length > 1 && (
         <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>Max Weight (kg)</Text>
+          <Text style={styles.chartTitle}>Max Weight (lbs)</Text>
           <LineChart
             data={{
-              labels: chartLabels.length > 6
-                ? chartLabels.map((l, i) => (i % Math.ceil(chartLabels.length / 6) === 0 ? l : ''))
-                : chartLabels,
+              labels: thinLabels,
               datasets: [{ data: chartData }],
             }}
-            width={SCREEN_WIDTH - 32}
-            height={200}
+            width={SCREEN_WIDTH - 32 - 28}
+            height={180}
             chartConfig={{
               backgroundColor: COLORS.surface,
               backgroundGradientFrom: COLORS.surface,
               backgroundGradientTo: COLORS.surface,
-              decimalPlaces: 1,
-              color: () => COLORS.primary,
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(255, 107, 53, ${opacity})`,
               labelColor: () => COLORS.textSecondary,
               propsForDots: { r: '4', strokeWidth: '2', stroke: COLORS.primary },
-              propsForBackgroundLines: { stroke: COLORS.border },
+              propsForBackgroundLines: { stroke: COLORS.border, strokeDasharray: '4,4' },
+              fillShadowGradientFrom: COLORS.primary,
+              fillShadowGradientTo: 'transparent',
+              fillShadowGradientOpacity: 0.15,
             }}
             bezier
             style={styles.chart}
             withInnerLines
             withOuterLines={false}
+            withShadow
           />
         </View>
       )}
 
+      {/* History */}
       <Text style={styles.sectionTitle}>History</Text>
       {[...dataPoints].reverse().map((dp, i) => (
         <View key={i} style={styles.historyCard}>
-          <Text style={styles.historyDate}>{formatDateShort(dp.date)}</Text>
+          <View style={styles.historyHeader}>
+            <Text style={styles.historyDate}>{formatDate(dp.date)}</Text>
+            <View style={styles.historyBest}>
+              <Ionicons name="trophy-outline" size={12} color={COLORS.highlight} />
+              <Text style={styles.historyBestText}>{dp.maxWeight} lbs best</Text>
+            </View>
+          </View>
           <View style={styles.setsList}>
             {dp.sets.map((s, si) => (
-              <Text key={si} style={styles.setItem}>
-                Set {si + 1}: {s.weight}kg × {s.reps} reps
-              </Text>
+              <View key={si} style={styles.setItem}>
+                <View style={styles.setNumWrap}>
+                  <Text style={styles.setNum}>{si + 1}</Text>
+                </View>
+                <Text style={styles.setDetail}>
+                  {s.weight} lbs × {s.reps} reps
+                </Text>
+                {parseFloat(s.weight) === dp.maxWeight && dp.maxWeight > 0 && (
+                  <Ionicons name="star" size={11} color={COLORS.highlight} />
+                )}
+              </View>
             ))}
           </View>
         </View>
@@ -121,73 +168,120 @@ export default function ProgressDetailScreen({ route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: 16 },
-  noData: {
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 80,
-    fontSize: 16,
+  content: { padding: LAYOUT.screenPadding, paddingBottom: 32 },
+  centerContent: { justifyContent: 'center', alignItems: 'center' },
+
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
+  emptyTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700', marginBottom: 6 },
+  emptySubText: { color: COLORS.textMuted, fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
+
   statsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   statCard: {
     flex: 1,
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: LAYOUT.cardRadius,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
+    gap: 4,
+    ...SHADOWS.soft,
   },
+  statIcon: { marginBottom: 2 },
   statValue: {
     color: COLORS.text,
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
   },
   statLabel: {
     color: COLORS.textSecondary,
     fontSize: 11,
-    marginTop: 4,
+    fontWeight: '500',
     textAlign: 'center',
   },
+
   chartContainer: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: LAYOUT.cardRadius,
+    padding: 16,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
+    ...SHADOWS.soft,
   },
   chartTitle: {
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
+    letterSpacing: 0.6,
+    marginBottom: 12,
   },
-  chart: { borderRadius: 8, marginLeft: -10 },
+  chart: { borderRadius: 8, marginLeft: -14 },
+
   sectionTitle: {
     color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginBottom: 10,
   },
   historyCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: LAYOUT.cardRadius,
     padding: 14,
-    marginBottom: 8,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
+    gap: 10,
+    ...SHADOWS.soft,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyDate: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+  historyBest: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    borderRadius: LAYOUT.pillRadius,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  historyBestText: { color: COLORS.highlight, fontSize: 12, fontWeight: '600' },
+
+  setsList: { gap: 6 },
+  setItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  historyDate: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
-  setsList: { gap: 3 },
-  setItem: { color: COLORS.textSecondary, fontSize: 13 },
+  setNumWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setNum: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700' },
+  setDetail: { color: COLORS.textSecondary, fontSize: 13, flex: 1 },
 });

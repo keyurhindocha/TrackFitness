@@ -116,3 +116,22 @@ export const deleteGoal = async (id) => {
     JSON.stringify(goals.filter((g) => g.id !== id))
   );
 };
+
+// ─── Bulk Export / Import ─────────────────────────────────────────────────────
+
+export const exportAllData = async () => {
+  const [workouts, cheatDays, goals] = await Promise.all([
+    getWorkouts(),
+    getCheatDays(),
+    getGoals(),
+  ]);
+  return { workouts, cheatDays, goals };
+};
+
+export const importAllData = async ({ workouts, cheatDays, goals }) => {
+  await AsyncStorage.multiSet([
+    [WORKOUTS_KEY, JSON.stringify(workouts ?? [])],
+    [CHEAT_DAYS_KEY, JSON.stringify(cheatDays ?? [])],
+    [GOALS_KEY, JSON.stringify(goals ?? [])],
+  ]);
+};

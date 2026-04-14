@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { Platform, TouchableOpacity } from 'react-native';
 import { COLORS } from '../utils/theme';
 
 import WorkoutsScreen from '../screens/WorkoutsScreen';
@@ -8,16 +9,20 @@ import LogWorkoutScreen from '../screens/LogWorkoutScreen';
 import ProgressScreen from '../screens/ProgressScreen';
 import ProgressDetailScreen from '../screens/ProgressDetailScreen';
 import CalendarScreen from '../screens/CalendarScreen';
-import CheatDaysScreen from '../screens/CheatDaysScreen';
+import CheatScreen from '../screens/CheatScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 const WorkoutsStack = createNativeStackNavigator();
 const ProgressStack = createNativeStackNavigator();
 
 const stackScreenOptions = {
-  headerStyle: { backgroundColor: COLORS.surface },
+  headerStyle: {
+    backgroundColor: COLORS.surface,
+  },
+  headerShadowVisible: false,
   headerTintColor: COLORS.text,
-  headerTitleStyle: { fontWeight: '700' },
+  headerTitleStyle: { fontWeight: '700', fontSize: 17 },
   contentStyle: { backgroundColor: COLORS.background },
 };
 
@@ -27,12 +32,33 @@ function WorkoutsNavigator() {
       <WorkoutsStack.Screen
         name="WorkoutsList"
         component={WorkoutsScreen}
-        options={{ title: 'Workouts' }}
+        options={({ navigation }) => ({
+          title: 'Workouts',
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Settings')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{
+                width: 36,
+                height: 36,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="settings-outline" size={22} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          ),
+        })}
       />
       <WorkoutsStack.Screen
         name="LogWorkout"
         component={LogWorkoutScreen}
-        options={{ title: 'Log Workout' }}
+        options={{ title: 'New Workout' }}
+      />
+      <WorkoutsStack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: 'Data & Backup' }}
       />
     </WorkoutsStack.Navigator>
   );
@@ -55,6 +81,13 @@ function ProgressNavigator() {
   );
 }
 
+const TAB_ICONS = {
+  Workouts: 'barbell-outline',
+  Progress: 'trending-up-outline',
+  Calendar: 'calendar-outline',
+  'Cheat Log': 'pizza-outline',
+};
+
 export default function AppNavigator() {
   return (
     <Tab.Navigator
@@ -63,18 +96,20 @@ export default function AppNavigator() {
         tabBarStyle: {
           backgroundColor: COLORS.surface,
           borderTopColor: COLORS.border,
+          borderTopWidth: 0.5,
+          paddingTop: 6,
+          height: Platform.OS === 'ios' ? 84 : 64,
         },
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
-        tabBarIcon: ({ color, size }) => {
-          const icons = {
-            Workouts: 'barbell-outline',
-            Progress: 'trending-up-outline',
-            Calendar: 'calendar-outline',
-            'Cheat Days': 'pizza-outline',
-          };
-          return <Ionicons name={icons[route.name]} size={size} color={color} />;
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: Platform.OS === 'ios' ? 0 : 6,
         },
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name={TAB_ICONS[route.name]} size={24} color={color} />
+        ),
       })}
     >
       <Tab.Screen name="Workouts" component={WorkoutsNavigator} />
@@ -82,12 +117,25 @@ export default function AppNavigator() {
       <Tab.Screen
         name="Calendar"
         component={CalendarScreen}
-        options={{ headerShown: true, headerStyle: { backgroundColor: COLORS.surface }, headerTintColor: COLORS.text, headerTitleStyle: { fontWeight: '700' } }}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: COLORS.surface },
+          headerShadowVisible: false,
+          headerTintColor: COLORS.text,
+          headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        }}
       />
       <Tab.Screen
-        name="Cheat Days"
-        component={CheatDaysScreen}
-        options={{ headerShown: true, headerStyle: { backgroundColor: COLORS.surface }, headerTintColor: COLORS.text, headerTitleStyle: { fontWeight: '700' } }}
+        name="Cheat Log"
+        component={CheatScreen}
+        options={{
+          headerShown: true,
+          title: 'Cheat Log',
+          headerStyle: { backgroundColor: COLORS.surface },
+          headerShadowVisible: false,
+          headerTintColor: COLORS.text,
+          headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        }}
       />
     </Tab.Navigator>
   );
