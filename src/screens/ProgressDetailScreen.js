@@ -12,10 +12,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts } from '../storage/storage';
 import { formatDateShort, formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { useUnit } from '../context/UnitContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function ProgressDetailScreen({ route }) {
+  const { unit } = useUnit();
   const { exerciseName } = route.params;
   const [dataPoints, setDataPoints] = useState([]);
 
@@ -74,7 +76,7 @@ export default function ProgressDetailScreen({ route }) {
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Ionicons name="trophy-outline" size={18} color={COLORS.highlight} style={styles.statIcon} />
-          <Text style={styles.statValue}>{last.maxWeight} lbs</Text>
+          <Text style={styles.statValue}>{last.maxWeight} {unit}</Text>
           <Text style={styles.statLabel}>Best Weight</Text>
         </View>
 
@@ -89,7 +91,7 @@ export default function ProgressDetailScreen({ route }) {
             styles.statValue,
             { color: deltaPositive ? COLORS.success : deltaNeutral ? COLORS.textSecondary : COLORS.danger },
           ]}>
-            {delta >= 0 ? '+' : ''}{delta} lbs
+            {delta >= 0 ? '+' : ''}{delta} {unit}
           </Text>
           <Text style={styles.statLabel}>vs Last Session</Text>
         </View>
@@ -104,7 +106,7 @@ export default function ProgressDetailScreen({ route }) {
       {/* Chart */}
       {chartData.length > 1 && (
         <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>Max Weight (lbs)</Text>
+          <Text style={styles.chartTitle}>Max Weight ({unit})</Text>
           <LineChart
             data={{
               labels: thinLabels,
@@ -142,7 +144,7 @@ export default function ProgressDetailScreen({ route }) {
             <Text style={styles.historyDate}>{formatDate(dp.date)}</Text>
             <View style={styles.historyBest}>
               <Ionicons name="trophy-outline" size={12} color={COLORS.highlight} />
-              <Text style={styles.historyBestText}>{dp.maxWeight} lbs best</Text>
+              <Text style={styles.historyBestText}>{dp.maxWeight} {unit} best</Text>
             </View>
           </View>
           <View style={styles.setsList}>
@@ -152,7 +154,7 @@ export default function ProgressDetailScreen({ route }) {
                   <Text style={styles.setNum}>{si + 1}</Text>
                 </View>
                 <Text style={styles.setDetail}>
-                  {s.weight} lbs × {s.reps} reps
+                  {s.weight} {unit} × {s.reps} reps
                 </Text>
                 {parseFloat(s.weight) === dp.maxWeight && dp.maxWeight > 0 && (
                   <Ionicons name="star" size={11} color={COLORS.highlight} />

@@ -117,6 +117,43 @@ export const deleteGoal = async (id) => {
   );
 };
 
+// ─── Unit Preference ─────────────────────────────────────────────────────────
+
+const UNIT_KEY = '@trackfitness_unit';
+
+export const getUnit = async () => {
+  try {
+    const val = await AsyncStorage.getItem(UNIT_KEY);
+    return val === 'kg' ? 'kg' : 'lbs';
+  } catch {
+    return 'lbs';
+  }
+};
+
+export const saveUnit = async (unit) => {
+  await AsyncStorage.setItem(UNIT_KEY, unit);
+};
+
+export const convertAllWorkoutWeights = async (fromUnit, toUnit) => {
+  if (fromUnit === toUnit) return;
+  const factor = toUnit === 'kg' ? 1 / 2.20462 : 2.20462;
+  const workouts = await getWorkouts();
+  const converted = workouts.map((w) => ({
+    ...w,
+    exercises: w.exercises.map((ex) => ({
+      ...ex,
+      sets: ex.sets.map((s) => ({
+        ...s,
+        weight:
+          s.weight > 0
+            ? Math.round(parseFloat(s.weight) * factor * 10) / 10
+            : s.weight,
+      })),
+    })),
+  }));
+  await AsyncStorage.setItem(WORKOUTS_KEY, JSON.stringify(converted));
+};
+
 // ─── Bulk Export / Import ─────────────────────────────────────────────────────
 
 export const exportAllData = async () => {

@@ -15,12 +15,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts, deleteWorkout } from '../storage/storage';
 import { formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { useUnit } from '../context/UnitContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 export default function WorkoutsScreen({ navigation }) {
+  const { unit } = useUnit();
   const [workouts, setWorkouts] = useState([]);
   const [expanded, setExpanded] = useState(null);
 
@@ -84,7 +86,7 @@ export default function WorkoutsScreen({ navigation }) {
                 {totalVolume > 0 && (
                   <View style={styles.pill}>
                     <Ionicons name="barbell-outline" size={11} color={COLORS.textMuted} />
-                    <Text style={styles.pillText}>{Math.round(totalVolume).toLocaleString()} lbs</Text>
+                    <Text style={styles.pillText}>{Math.round(totalVolume).toLocaleString()} {unit}</Text>
                   </View>
                 )}
               </View>

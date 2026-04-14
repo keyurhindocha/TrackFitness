@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { saveWorkout, getWorkouts } from '../storage/storage';
 import { generateId, getTodayString, formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { useUnit } from '../context/UnitContext';
 
 const QUICK_EXERCISES = [
   'Barbell Row', 'Bench Press', 'Bicep Curls', 'Deadlift',
@@ -22,6 +23,7 @@ const QUICK_EXERCISES = [
 ];
 
 export default function LogWorkoutScreen({ navigation }) {
+  const { unit } = useUnit();
   const [exercises, setExercises] = useState([]);
   const [showInput, setShowInput] = useState(false);
   const [newName, setNewName] = useState('');
@@ -153,7 +155,7 @@ export default function LogWorkoutScreen({ navigation }) {
             {exercise.sets.length > 0 && (
               <View style={styles.setsTableHeader}>
                 <Text style={[styles.colLabel, styles.colSet]}>SET</Text>
-                <Text style={[styles.colLabel, styles.colWeight]}>LBS</Text>
+                <Text style={[styles.colLabel, styles.colWeight]}>{unit.toUpperCase()}</Text>
                 <Text style={[styles.colLabel, styles.colReps]}>REPS</Text>
                 <View style={styles.colDelete} />
               </View>

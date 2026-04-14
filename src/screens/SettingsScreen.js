@@ -15,6 +15,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { exportAllData, importAllData } from '../storage/storage';
 import { getTodayString } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { useUnit } from '../context/UnitContext';
 
 const EXPORT_VERSION = '1';
 
@@ -31,6 +32,7 @@ function StatRow({ icon, label, value, color }) {
 }
 
 export default function SettingsScreen() {
+  const { unit, setUnitAndConvert } = useUnit();
   const [exportState, setExportState] = useState('idle'); // idle | loading | done | error
   const [importState, setImportState] = useState('idle'); // idle | loading | done | error
   const [summary, setSummary] = useState(null); // { workouts, cheatDays, goals }
@@ -43,6 +45,25 @@ export default function SettingsScreen() {
   const loadSummary = async () => {
     const data = await exportAllData();
     setSummary(data);
+  };
+
+  // ── Unit ──────────────────────────────────────────────────────────────────
+
+  const handleUnitChange = (newUnit) => {
+    if (newUnit === unit) return;
+    const workoutCount = summary?.workouts?.length ?? 0;
+    const msg = workoutCount > 0
+      ? `Switch to ${newUnit}? All ${workoutCount} workout${workoutCount !== 1 ? 's' : ''} will be converted automatically.`
+      : `Switch to ${newUnit}?`;
+    Alert.alert('Change Unit', msg, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: `Use ${newUnit}`,
+        onPress: async () => {
+          await setUnitAndConvert(newUnit);
+        },
+      },
+    ]);
   };
 
   // ── Export ────────────────────────────────────────────────────────────────
@@ -202,6 +223,35 @@ export default function SettingsScreen() {
           </View>
         </View>
       )}
+
+      {/* Unit */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={[styles.cardIconWrap, { backgroundColor: `${COLORS.highlight}18` }]}>
+            <Ionicons name="scale-outline" size={22} color={COLORS.highlight} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Weight Unit</Text>
+            <Text style={styles.cardSubtitle}>
+              All workout data will be converted when you switch
+            </Text>
+          </View>
+        </View>
+        <View style={styles.unitToggleRow}>
+          {['lbs', 'kg'].map((u) => (
+            <TouchableOpacity
+              key={u}
+              style={[styles.unitBtn, unit === u && styles.unitBtnActive]}
+              onPress={() => handleUnitChange(u)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.unitBtnText, unit === u && styles.unitBtnTextActive]}>
+                {u}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
 
       {/* Export */}
       <View style={styles.card}>
@@ -416,6 +466,32 @@ const styles = StyleSheet.create({
   },
   actionBtnDisabled: { opacity: 0.5 },
   actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  unitToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  unitBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  unitBtnActive: {
+    backgroundColor: `${COLORS.highlight}18`,
+    borderColor: COLORS.highlight,
+  },
+  unitBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  unitBtnTextActive: {
+    color: COLORS.highlight,
+  },
 
   infoCard: {
     flexDirection: 'row',

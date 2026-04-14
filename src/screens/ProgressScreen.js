@@ -11,6 +11,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts } from '../storage/storage';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { useUnit } from '../context/UnitContext';
 
 function Sparkline({ data, width = 80, height = 36 }) {
   if (data.length < 2) return null;
@@ -43,6 +44,7 @@ function Sparkline({ data, width = 80, height = 36 }) {
 }
 
 export default function ProgressScreen({ navigation }) {
+  const { unit } = useUnit();
   const [exercises, setExercises] = useState([]);
 
   useFocusEffect(
@@ -97,7 +99,7 @@ export default function ProgressScreen({ navigation }) {
               <View style={styles.statPill}>
                 <Ionicons name="trophy-outline" size={11} color={COLORS.highlight} />
                 <Text style={[styles.statPillText, { color: COLORS.highlight }]}>
-                  {item.maxWeight} lbs
+                  {item.maxWeight} {unit}
                 </Text>
               </View>
             )}
@@ -113,7 +115,7 @@ export default function ProgressScreen({ navigation }) {
                 styles.trendText,
                 { color: trendUp ? COLORS.success : trendDown ? COLORS.danger : COLORS.textMuted },
               ]}>
-                {Math.abs(trend)} lbs vs last
+                {Math.abs(trend)} {unit} vs last
               </Text>
             </View>
           )}

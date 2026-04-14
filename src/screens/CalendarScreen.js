@@ -12,8 +12,10 @@ import { Calendar } from 'react-native-calendars';
 import { getWorkouts } from '../storage/storage';
 import { getTodayString, formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS, CALENDAR_THEME } from '../utils/theme';
+import { useUnit } from '../context/UnitContext';
 
 export default function CalendarScreen({ navigation }) {
+  const { unit } = useUnit();
   const [workouts, setWorkouts] = useState([]);
   const [markedDates, setMarkedDates] = useState({});
   const [selectedDate, setSelectedDate] = useState(getTodayString());
@@ -115,7 +117,7 @@ export default function CalendarScreen({ navigation }) {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.exerciseName}>{ex.name}</Text>
                     <Text style={styles.setsText}>
-                      {ex.sets.map((s) => `${s.weight} × ${s.reps}`).join('  ·  ')}
+                      {ex.sets.map((s) => `${s.weight}${unit} × ${s.reps}`).join('  ·  ')}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={14} color={COLORS.textMuted} />
