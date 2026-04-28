@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,27 +8,54 @@ import {
   ScrollView,
   Alert,
   KeyboardAvoidingView,
+  InputAccessoryView,
+  Keyboard,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { saveWorkout, getWorkouts } from '../storage/storage';
+import { saveWorkout, updateWorkout, getWorkouts } from '../storage/storage';
 import { generateId, getTodayString, formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 import { useUnit } from '../context/UnitContext';
 
-const QUICK_EXERCISES = [
+const KEYBOARD_ACCESSORY_ID = 'workout-inputs';
+
+const BASE_EXERCISES = [
   'Barbell Row', 'Bench Press', 'Bicep Curls', 'Deadlift',
   'Dips', 'Leg Press', 'Overhead Press', 'Pull-ups',
   'Squat', 'Tricep Pushdown',
 ];
 
-export default function LogWorkoutScreen({ navigation }) {
+export default function LogWorkoutScreen({ navigation, route }) {
   const { unit } = useUnit();
-  const [exercises, setExercises] = useState([]);
+  const editingWorkout = route.params?.workout ?? null;
+
+  const [exercises, setExercises] = useState(() =>
+    editingWorkout
+      ? editingWorkout.exercises.map((ex) => ({
+          id: generateId(),
+          name: ex.name,
+          sets: ex.sets.map((s) => ({
+            weight: s.weight > 0 ? String(s.weight) : '',
+            reps: s.reps > 0 ? String(s.reps) : '',
+          })),
+        }))
+      : []
+  );
   const [showInput, setShowInput] = useState(false);
   const [newName, setNewName] = useState('');
+  const [exerciseSuggestions, setExerciseSuggestions] = useState(BASE_EXERCISES);
   const scrollRef = useRef(null);
   const today = getTodayString();
+  const displayDate = editingWorkout?.date ?? today;
+
+  useEffect(() => {
+    getWorkouts().then((workouts) => {
+      const past = workouts.flatMap((w) => w.exercises.map((e) => e.name));
+      const merged = Array.from(new Set([...past, ...BASE_EXERCISES]));
+      setExerciseSuggestions(merged);
+    });
+  }, []);
 
   const addExercise = async (name) => {
     const trimmed = name.trim();
@@ -68,11 +95,11 @@ export default function LogWorkoutScreen({ navigation }) {
 
   const addSet = (exerciseId) => {
     setExercises((prev) =>
-      prev.map((ex) =>
-        ex.id === exerciseId
-          ? { ...ex, sets: [...ex.sets, { reps: '', weight: '' }] }
-          : ex
-      )
+      prev.map((ex) => {
+        if (ex.id !== exerciseId) return ex;
+        const last = ex.sets.length > 0 ? ex.sets[ex.sets.length - 1] : { weight: '', reps: '' };
+        return { ...ex, sets: [...ex.sets, { weight: last.weight, reps: last.reps }] };
+      })
     );
   };
 
@@ -103,8 +130,8 @@ export default function LogWorkoutScreen({ navigation }) {
       return;
     }
     const workout = {
-      id: generateId(),
-      date: today,
+      id: editingWorkout?.id ?? generateId(),
+      date: editingWorkout?.date ?? today,
       exercises: exercises.map((ex) => ({
         name: ex.name,
         sets: ex.sets.map((s) => ({
@@ -113,7 +140,11 @@ export default function LogWorkoutScreen({ navigation }) {
         })),
       })),
     };
-    await saveWorkout(workout);
+    if (editingWorkout) {
+      await updateWorkout(workout);
+    } else {
+      await saveWorkout(workout);
+    }
     navigation.goBack();
   };
 
@@ -133,7 +164,7 @@ export default function LogWorkoutScreen({ navigation }) {
         {/* Date header */}
         <View style={styles.dateHeader}>
           <Ionicons name="calendar-outline" size={14} color={COLORS.textMuted} />
-          <Text style={styles.dateHeading}>{formatDate(today)}</Text>
+          <Text style={styles.dateHeading}>{formatDate(displayDate)}</Text>
         </View>
 
         {exercises.map((exercise) => (
@@ -175,6 +206,7 @@ export default function LogWorkoutScreen({ navigation }) {
                   onChangeText={(v) => updateSet(exercise.id, si, 'weight', v)}
                   returnKeyType="next"
                   selectTextOnFocus
+                  inputAccessoryViewID={Platform.OS === 'ios' ? KEYBOARD_ACCESSORY_ID : undefined}
                 />
                 <TextInput
                   style={[styles.setInput, styles.colReps]}
@@ -184,6 +216,7 @@ export default function LogWorkoutScreen({ navigation }) {
                   value={set.reps}
                   onChangeText={(v) => updateSet(exercise.id, si, 'reps', v)}
                   selectTextOnFocus
+                  inputAccessoryViewID={Platform.OS === 'ios' ? KEYBOARD_ACCESSORY_ID : undefined}
                 />
                 <TouchableOpacity
                   style={[styles.colDelete, styles.removeSetBtn]}
@@ -221,23 +254,27 @@ export default function LogWorkoutScreen({ navigation }) {
               contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}
               keyboardShouldPersistTaps="always"
             >
-              {QUICK_EXERCISES.map((name) => (
-                <TouchableOpacity
-                  key={name}
-                  style={[
-                    styles.quickChip,
-                    newName === name && styles.quickChipActive,
-                  ]}
-                  onPress={() => addExercise(name)}
-                >
-                  <Text style={[
-                    styles.quickChipText,
-                    newName === name && styles.quickChipTextActive,
-                  ]}>
-                    {name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {exerciseSuggestions
+                .filter((n) =>
+                  !newName.trim() || n.toLowerCase().includes(newName.toLowerCase().trim())
+                )
+                .map((name) => (
+                  <TouchableOpacity
+                    key={name}
+                    style={[
+                      styles.quickChip,
+                      newName.trim().toLowerCase() === name.toLowerCase() && styles.quickChipActive,
+                    ]}
+                    onPress={() => addExercise(name)}
+                  >
+                    <Text style={[
+                      styles.quickChipText,
+                      newName.trim().toLowerCase() === name.toLowerCase() && styles.quickChipTextActive,
+                    ]}>
+                      {name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
             </ScrollView>
             <View style={styles.inputRow}>
               <TouchableOpacity
@@ -277,6 +314,16 @@ export default function LogWorkoutScreen({ navigation }) {
           <Text style={styles.saveBtnText}>Save Workout</Text>
         </TouchableOpacity>
       </View>
+
+      {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID={KEYBOARD_ACCESSORY_ID}>
+          <View style={styles.keyboardBar}>
+            <TouchableOpacity onPress={() => Keyboard.dismiss()} style={styles.keyboardDoneBtn}>
+              <Text style={styles.keyboardDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -284,7 +331,7 @@ export default function LogWorkoutScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { flex: 1 },
-  scrollContent: { padding: LAYOUT.screenPadding, paddingBottom: 130 },
+  scrollContent: { padding: LAYOUT.screenPadding, paddingBottom: 16 },
 
   dateHeader: {
     flexDirection: 'row',
@@ -473,10 +520,6 @@ const styles = StyleSheet.create({
   addExerciseText: { color: COLORS.primary, fontSize: 16, fontWeight: '700' },
 
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingHorizontal: LAYOUT.screenPadding,
     paddingTop: 12,
     paddingBottom: 28,
@@ -501,4 +544,23 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   saveBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+
+  keyboardBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: COLORS.surface,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
+  },
+  keyboardDoneBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  keyboardDoneText: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });

@@ -1,9 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   Alert,
   LayoutAnimation,
@@ -15,14 +15,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts, deleteWorkout } from '../storage/storage';
 import { formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
-import { useUnit } from '../context/UnitContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+const exerciseTitle = (exercises) => {
+  if (exercises.length === 0) return 'No exercises';
+  const names = exercises.map((e) => e.name);
+  if (names.length <= 3) return names.join(', ');
+  return names.slice(0, 3).join(', ') + ` +${names.length - 3} more`;
+};
+
 export default function WorkoutsScreen({ navigation }) {
-  const { unit } = useUnit();
   const [workouts, setWorkouts] = useState([]);
   const [expanded, setExpanded] = useState(null);
 
@@ -32,9 +37,24 @@ export default function WorkoutsScreen({ navigation }) {
     }, [])
   );
 
+  const sections = useMemo(() => {
+    const grouped = {};
+    workouts.forEach((w) => {
+      if (!grouped[w.date]) grouped[w.date] = [];
+      grouped[w.date].push(w);
+    });
+    return Object.keys(grouped)
+      .sort((a, b) => b.localeCompare(a))
+      .map((date) => ({ title: date, data: grouped[date] }));
+  }, [workouts]);
+
   const handleToggle = (id) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpanded((prev) => (prev === id ? null : id));
+  };
+
+  const handleEdit = (item) => {
+    navigation.navigate('LogWorkout', { workout: item });
   };
 
   const handleDelete = (id) => {
@@ -51,13 +71,16 @@ export default function WorkoutsScreen({ navigation }) {
     ]);
   };
 
-  const renderWorkout = ({ item, index }) => {
+  const renderSectionHeader = ({ section }) => (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionDot} />
+      <Text style={styles.sectionTitle}>{formatDate(section.title)}</Text>
+    </View>
+  );
+
+  const renderWorkout = ({ item }) => {
     const isExpanded = expanded === item.id;
     const totalSets = item.exercises.reduce((n, ex) => n + ex.sets.length, 0);
-    const totalVolume = item.exercises.reduce(
-      (sum, ex) => sum + ex.sets.reduce((s, set) => s + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0),
-      0
-    );
 
     return (
       <TouchableOpacity
@@ -65,13 +88,14 @@ export default function WorkoutsScreen({ navigation }) {
         onPress={() => handleToggle(item.id)}
         activeOpacity={0.75}
       >
-        {/* Left accent bar */}
         <View style={styles.accentBar} />
 
         <View style={styles.cardInner}>
           <View style={styles.cardHeader}>
             <View style={styles.cardHeaderLeft}>
-              <Text style={styles.dateText}>{formatDate(item.date)}</Text>
+              <Text style={styles.workoutTitle} numberOfLines={2}>
+                {exerciseTitle(item.exercises)}
+              </Text>
               <View style={styles.pillRow}>
                 <View style={styles.pill}>
                   <Ionicons name="layers-outline" size={11} color={COLORS.textMuted} />
@@ -83,16 +107,17 @@ export default function WorkoutsScreen({ navigation }) {
                   <Ionicons name="repeat-outline" size={11} color={COLORS.textMuted} />
                   <Text style={styles.pillText}>{totalSets} sets</Text>
                 </View>
-                {totalVolume > 0 && (
-                  <View style={styles.pill}>
-                    <Ionicons name="barbell-outline" size={11} color={COLORS.textMuted} />
-                    <Text style={styles.pillText}>{Math.round(totalVolume).toLocaleString()} {unit}</Text>
-                  </View>
-                )}
               </View>
             </View>
 
             <View style={styles.cardActions}>
+              <TouchableOpacity
+                onPress={() => handleEdit(item)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.editBtn}
+              >
+                <Ionicons name="pencil-outline" size={16} color={COLORS.primary} />
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleDelete(item.id)}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -132,12 +157,14 @@ export default function WorkoutsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={workouts}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         renderItem={renderWorkout}
+        renderSectionHeader={renderSectionHeader}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
         ListEmptyComponent={
           <View style={styles.empty}>
             <View style={styles.emptyIconWrap}>
@@ -169,10 +196,32 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   list: { padding: LAYOUT.screenPadding, paddingBottom: 110 },
 
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+    opacity: 0.6,
+  },
+  sectionTitle: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+
   card: {
     backgroundColor: COLORS.surface,
     borderRadius: LAYOUT.cardRadius,
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
     flexDirection: 'row',
@@ -193,10 +242,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  cardHeaderLeft: { flex: 1, gap: 8 },
+  cardHeaderLeft: { flex: 1, gap: 6 },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 8 },
 
-  dateText: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
+  workoutTitle: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
 
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   pill: {
@@ -210,6 +264,14 @@ const styles = StyleSheet.create({
   },
   pillText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '500' },
 
+  editBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   deleteBtn: {
     width: 32,
     height: 32,

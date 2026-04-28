@@ -53,7 +53,7 @@ function WorkoutsNavigator() {
       <WorkoutsStack.Screen
         name="LogWorkout"
         component={LogWorkoutScreen}
-        options={{ title: 'New Workout' }}
+        options={({ route }) => ({ title: route.params?.workout ? 'Edit Workout' : 'New Workout' })}
       />
       <WorkoutsStack.Screen
         name="Settings"

@@ -1,21 +1,34 @@
 {
   "expo": {
     "name": "TrackFitness",
-    "slug": "trackfitness",
+    "slug": "track-fitness",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "updates": {
+      "url": "https://u.expo.dev/1a9a5a0f-b46c-4576-8faf-9dff705bad3a"
+    },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.anonymous.trackfitness"
+      "bundleIdentifier": "com.anonymous.trackfitness",
+      "runtimeVersion": "1.0.0"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0a"
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
       }
     },
     "plugins": [
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1a9a5a0f-b46c-4576-8faf-9dff705bad3a"
+      }
+    },
+    "owner": "keyurs-organization"
   }
 }
