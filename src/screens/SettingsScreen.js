@@ -4,18 +4,16 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as DocumentPicker from 'expo-document-picker';
+import { saveBackup, pickBackupJson } from '../utils/backup';
 import { exportAllData, importAllData } from '../storage/storage';
 import { getTodayString } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 import { useUnit } from '../context/UnitContext';
+import { showAlert } from '../components/AlertHost';
 
 const EXPORT_VERSION = '1';
 
@@ -55,7 +53,7 @@ export default function SettingsScreen() {
     const msg = workoutCount > 0
       ? `Switch to ${newUnit}? All ${workoutCount} workout${workoutCount !== 1 ? 's' : ''} will be converted automatically.`
       : `Switch to ${newUnit}?`;
-    Alert.alert('Change Unit', msg, [
+    showAlert('Change Unit', msg, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: `Use ${newUnit}`,
@@ -84,30 +82,20 @@ export default function SettingsScreen() {
       );
 
       const filename = `trackfitness_backup_${getTodayString()}.json`;
-      const fileUri = FileSystem.cacheDirectory + filename;
-      await FileSystem.writeAsStringAsync(fileUri, payload, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      const outcome = await saveBackup(filename, payload);
 
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        Alert.alert('Sharing not available', 'Your device does not support file sharing.');
+      if (outcome === 'unavailable') {
+        showAlert('Sharing not available', 'Your device does not support file sharing.');
         setExportState('error');
         return;
       }
-
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/json',
-        dialogTitle: 'Save TrackFitness Backup',
-        UTI: 'public.json',
-      });
 
       setLastExportFile(filename);
       setExportState('done');
     } catch (err) {
       console.error('Export failed:', err);
       setExportState('error');
-      Alert.alert('Export failed', 'Something went wrong while exporting your data.');
+      showAlert('Export failed', 'Something went wrong while exporting your data.');
     }
   };
 
@@ -116,33 +104,27 @@ export default function SettingsScreen() {
   const handleImport = async () => {
     setImportState('loading');
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/json', 'text/plain', 'public.json', '*/*'],
-        copyToCacheDirectory: true,
-      });
+      const picked = await pickBackupJson();
 
-      if (result.canceled || !result.assets?.length) {
+      if (picked.canceled) {
         setImportState('idle');
         return;
       }
 
-      const fileUri = result.assets[0].uri;
-      const raw = await FileSystem.readAsStringAsync(fileUri, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      const raw = picked.contents;
 
       let parsed;
       try {
         parsed = JSON.parse(raw);
       } catch {
-        Alert.alert('Invalid file', 'The selected file is not valid JSON.');
+        showAlert('Invalid file', 'The selected file is not valid JSON.');
         setImportState('error');
         return;
       }
 
       // Validate structure
       if (!parsed.workouts && !parsed.cheatDays && !parsed.goals) {
-        Alert.alert(
+        showAlert(
           'Unrecognised file',
           'This file does not look like a TrackFitness backup. Make sure you select a file exported from this app.'
         );
@@ -154,7 +136,7 @@ export default function SettingsScreen() {
       const cheatCount = parsed.cheatDays?.length ?? 0;
       const goalCount = parsed.goals?.length ?? 0;
 
-      Alert.alert(
+      showAlert(
         'Restore backup?',
         `This will replace all your current data with:\n\n• ${workoutCount} workout${workoutCount !== 1 ? 's' : ''}\n• ${cheatCount} cheat day${cheatCount !== 1 ? 's' : ''}\n• ${goalCount} goal${goalCount !== 1 ? 's' : ''}\n\nThis cannot be undone.`,
         [
@@ -181,7 +163,7 @@ export default function SettingsScreen() {
     } catch (err) {
       console.error('Import failed:', err);
       setImportState('error');
-      Alert.alert('Import failed', 'Something went wrong while reading the file.');
+      showAlert('Import failed', 'Something went wrong while reading the file.');
     }
   };
 

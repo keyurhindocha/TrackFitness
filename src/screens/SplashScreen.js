@@ -6,11 +6,16 @@ import {
   View,
   Easing,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../utils/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// react-native-web has no native animated module; driving these on the JS
+// thread avoids a console warning on every page load.
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
 // ─── Timing ────────────────────────────────────────────────────────────────
 const RING_IN    = 700;   // rings bloom in
@@ -70,7 +75,7 @@ export default function SplashScreen({ onFinish }) {
         Animated.parallel([
           Animated.spring(ringScales[i], {
             toValue: 1,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
             tension: 38 - i * 4,
             friction: 9 + i,
           }),
@@ -78,7 +83,7 @@ export default function SplashScreen({ onFinish }) {
             toValue: 1,
             duration: RING_IN,
             easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
         ]),
       ])
@@ -93,14 +98,14 @@ export default function SplashScreen({ onFinish }) {
           Animated.parallel([
             Animated.spring(iconScale, {
               toValue: 1,
-              useNativeDriver: true,
+              useNativeDriver: USE_NATIVE_DRIVER,
               tension: 90,
               friction: 5,
             }),
             Animated.timing(iconOpacity, {
               toValue: 1,
               duration: ICON_IN,
-              useNativeDriver: true,
+              useNativeDriver: USE_NATIVE_DRIVER,
             }),
           ]),
         ]),
@@ -112,13 +117,13 @@ export default function SplashScreen({ onFinish }) {
           toValue: 0,
           duration: TEXT_IN,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.timing(nameOpacity, {
           toValue: 1,
           duration: TEXT_IN,
           easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ]),
 
@@ -126,7 +131,7 @@ export default function SplashScreen({ onFinish }) {
       Animated.timing(tagOpacity, {
         toValue: 1,
         duration: TAG_IN,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
 
       // Phase 4: Hold
@@ -137,7 +142,7 @@ export default function SplashScreen({ onFinish }) {
         toValue: 0,
         duration: FADE_OUT,
         easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => onFinish?.());
   }, []);

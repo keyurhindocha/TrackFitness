@@ -10,7 +10,6 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Calendar } from 'react-native-calendars';
@@ -18,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getCheatDays, saveCheatDay, deleteCheatDay } from '../storage/storage';
 import { generateId, getTodayString, formatDate, getMonthKey, getWeekStart } from '../utils/helpers';
 import { COLORS, CALENDAR_THEME, LAYOUT, SHADOWS } from '../utils/theme';
+import { showAlert } from '../components/AlertHost';
 
 const TAGS = [
   { key: 'cookie', label: 'Cookie', color: COLORS.highlight, icon: 'cafe-outline' },
@@ -122,7 +122,7 @@ export default function CheatScreen() {
     const item = selectedCheatDay?.items?.map(normalizeItem)[index];
     const itemLabel = item?.text || 'this cheat';
 
-    Alert.alert(
+    showAlert(
       'Delete cheat?',
       `Remove "${itemLabel}" from ${formatDate(selectedDate)}?`,
       [

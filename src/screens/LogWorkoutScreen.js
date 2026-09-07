@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Alert,
   KeyboardAvoidingView,
   InputAccessoryView,
   Keyboard,
@@ -17,6 +16,7 @@ import { saveWorkout, updateWorkout, getWorkouts } from '../storage/storage';
 import { generateId, getTodayString, formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 import { useUnit } from '../context/UnitContext';
+import { showAlert } from '../components/AlertHost';
 
 const KEYBOARD_ACCESSORY_ID = 'workout-inputs';
 
@@ -126,7 +126,7 @@ export default function LogWorkoutScreen({ navigation, route }) {
 
   const handleSave = async () => {
     if (exercises.length === 0) {
-      Alert.alert('No exercises', 'Add at least one exercise before saving.');
+      showAlert('No exercises', 'Add at least one exercise before saving.');
       return;
     }
     const workout = {

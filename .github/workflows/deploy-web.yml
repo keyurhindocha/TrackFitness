@@ -1,0 +1,62 @@
+name: Deploy web app to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow GITHUB_TOKEN to publish to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish; queue at most one more.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static web bundle
+        # Pages serves this repo from /<repo-name>/, so assets need that prefix.
+        env:
+          EXPO_WEB_BASE_URL: /${{ github.event.repository.name }}
+        run: npx expo export --platform web
+
+      - name: Prepare output for Pages
+        run: |
+          # Without .nojekyll, GitHub Pages' Jekyll step strips the _expo/
+          # directory, which is where the JS bundle lives.
+          touch dist/.nojekyll
+          # Single-page app: serve index.html for unknown paths (e.g. refresh
+          # on a deep link) instead of a Pages 404.
+          cp dist/index.html dist/404.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
