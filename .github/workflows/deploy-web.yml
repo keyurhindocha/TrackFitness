@@ -45,11 +45,11 @@ jobs:
           # on a deep link) instead of a Pages 404.
           cp dist/index.html dist/404.html
 
+      # Requires Pages to be enabled once under Settings -> Pages -> Source ->
+      # GitHub Actions. The `enablement: true` input cannot do it here: the
+      # workflow's GITHUB_TOKEN is refused by the create-Pages-site endpoint
+      # ("Resource not accessible by integration").
       - uses: actions/configure-pages@v5
-        with:
-          # Creates the Pages site on the first run, so the repository does not
-          # have to be switched to "GitHub Actions" in Settings by hand.
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
