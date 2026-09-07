@@ -29,6 +29,20 @@
         "projectId": "1a9a5a0f-b46c-4576-8faf-9dff705bad3a"
       }
     },
-    "owner": "keyurs-organization"
+    "owner": "keyurs-organization",
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "TrackFitness",
+      "shortName": "TrackFitness",
+      "description": "Log workouts, track lifting progress, and keep an eye on cheat days.",
+      "themeColor": "#0a0a0a",
+      "backgroundColor": "#0a0a0a",
+      "display": "standalone",
+      "orientation": "portrait",
+      "lang": "en",
+      "favicon": "./assets/favicon.png"
+    },
+    "icon": "./assets/icon.png"
   }
 }

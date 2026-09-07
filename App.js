@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/screens/SplashScreen';
 import { UnitProvider } from './src/context/UnitContext';
+import AlertHost from './src/components/AlertHost';
 
 export default function App() {
   const [splashDone, setSplashDone] = useState(false);
@@ -21,6 +22,7 @@ export default function App() {
             <AppNavigator />
           </NavigationContainer>
         )}
+        <AlertHost />
       </UnitProvider>
     </SafeAreaProvider>
   );

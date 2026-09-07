@@ -10,13 +10,13 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getGoals, saveGoal, deleteGoal, getWorkouts } from '../storage/storage';
 import { generateId, getTodayString, getMonthKey, getWeekStart } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { showAlert } from '../components/AlertHost';
 
 const GOAL_TYPES = [
   {
@@ -140,11 +140,11 @@ export default function GoalsScreen({ navigation }) {
   const handleSaveGoal = async () => {
     const target = parseFloat(targetValue);
     if (!target || target <= 0) {
-      Alert.alert('Invalid target', 'Enter a number greater than 0.');
+      showAlert('Invalid target', 'Enter a number greater than 0.');
       return;
     }
     if (selectedType === 'weight_target' && !exerciseName.trim()) {
-      Alert.alert('Missing exercise', 'Enter an exercise name for this goal.');
+      showAlert('Missing exercise', 'Enter an exercise name for this goal.');
       return;
     }
 
@@ -167,7 +167,7 @@ export default function GoalsScreen({ navigation }) {
   };
 
   const handleDeleteGoal = (id) => {
-    Alert.alert('Delete goal?', 'This cannot be undone.', [
+    showAlert('Delete goal?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',

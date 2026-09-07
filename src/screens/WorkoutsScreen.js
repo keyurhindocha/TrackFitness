@@ -5,7 +5,6 @@ import {
   StyleSheet,
   SectionList,
   TouchableOpacity,
-  Alert,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -15,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts, deleteWorkout } from '../storage/storage';
 import { formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { showAlert } from '../components/AlertHost';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -58,7 +58,7 @@ export default function WorkoutsScreen({ navigation }) {
   };
 
   const handleDelete = (id) => {
-    Alert.alert('Delete Workout', 'Remove this workout permanently?', [
+    showAlert('Delete Workout', 'Remove this workout permanently?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
