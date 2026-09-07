@@ -63,9 +63,12 @@ npm run serve:web   # preview at http://localhost:3000
 `dist/` is a plain static folder, so any free static host works.
 
 **GitHub Pages (automated).** `.github/workflows/deploy-web.yml` builds and
-deploys on every push to `main`. Enable it once: repository **Settings → Pages
-→ Source → GitHub Actions**. The site then publishes to
-`https://<user>.github.io/<repo>/`.
+deploys on every push to `main`, and enables Pages itself on the first run. The
+site publishes to `https://<user>.github.io/<repo>/`.
+
+If that first run fails to create the site, the repository setting can be
+flipped by hand instead: **Settings → Pages → Source → GitHub Actions**, then
+re-run the workflow.
 
 **Netlify / Vercel / Cloudflare Pages.** Point the project at this repo and use:
 
