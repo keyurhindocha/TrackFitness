@@ -117,6 +117,8 @@ export default function WorkoutsScreen({ navigation }) {
                 onPress={() => handleEdit(item)}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={styles.editBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit workout from ${formatDate(item.date)}`}
               >
                 <Ionicons name="pencil-outline" size={16} color={COLORS.primary} />
               </TouchableOpacity>
@@ -124,6 +126,8 @@ export default function WorkoutsScreen({ navigation }) {
                 onPress={() => handleDelete(item.id)}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={styles.deleteBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete workout from ${formatDate(item.date)}`}
               >
                 <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
               </TouchableOpacity>

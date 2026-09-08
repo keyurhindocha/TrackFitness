@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,34 +17,35 @@ import { useUnit } from '../context/UnitContext';
 export default function CalendarScreen({ navigation }) {
   const { unit } = useUnit();
   const [workouts, setWorkouts] = useState([]);
-  const [markedDates, setMarkedDates] = useState({});
   const [selectedDate, setSelectedDate] = useState(getTodayString());
-  const [selectedWorkout, setSelectedWorkout] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
-      getWorkouts().then((data) => {
-        setWorkouts(data);
-        const marks = {};
-        data.forEach((w) => {
-          marks[w.date] = {
-            marked: true,
-            dotColor: COLORS.primary,
-          };
-        });
-        setMarkedDates(marks);
-
-        const todayWorkout = data.find((w) => w.date === getTodayString());
-        setSelectedWorkout(todayWorkout || null);
-      });
+      getWorkouts().then(setWorkouts);
     }, [])
   );
 
-  const handleDayPress = (day) => {
-    setSelectedDate(day.dateString);
-    const workout = workouts.find((w) => w.date === day.dateString);
-    setSelectedWorkout(workout || null);
-  };
+  const markedDates = useMemo(() => {
+    const marks = {};
+    workouts.forEach((w) => {
+      marks[w.date] = { marked: true, dotColor: COLORS.primary };
+    });
+    return marks;
+  }, [workouts]);
+
+  // A day can hold several workouts, so take all of them. Deriving this from
+  // the selected date rather than storing it keeps the two from drifting apart
+  // when the screen reloads on focus.
+  const dayWorkouts = useMemo(
+    () => workouts.filter((w) => w.date === selectedDate),
+    [workouts, selectedDate]
+  );
+  const dayExercises = useMemo(
+    () => dayWorkouts.flatMap((w) => w.exercises),
+    [dayWorkouts]
+  );
+
+  const handleDayPress = (day) => setSelectedDate(day.dateString);
 
   const markedWithSelected = {
     ...markedDates,
@@ -55,9 +56,7 @@ export default function CalendarScreen({ navigation }) {
     },
   };
 
-  const totalSets = selectedWorkout
-    ? selectedWorkout.exercises.reduce((n, ex) => n + ex.sets.length, 0)
-    : 0;
+  const totalSets = dayExercises.reduce((n, ex) => n + ex.sets.length, 0);
 
   return (
     <ScrollView
@@ -77,7 +76,7 @@ export default function CalendarScreen({ navigation }) {
       <View style={styles.detail}>
         <View style={styles.detailHeader}>
           <Text style={styles.detailDate}>{formatDate(selectedDate)}</Text>
-          {selectedWorkout && (
+          {dayExercises.length > 0 && (
             <View style={styles.detailBadge}>
               <Ionicons name="checkmark-circle" size={13} color={COLORS.success} />
               <Text style={styles.detailBadgeText}>Workout logged</Text>
@@ -85,13 +84,13 @@ export default function CalendarScreen({ navigation }) {
           )}
         </View>
 
-        {selectedWorkout ? (
+        {dayExercises.length > 0 ? (
           <>
             <View style={styles.summaryRow}>
               <View style={styles.summaryPill}>
                 <Ionicons name="layers-outline" size={12} color={COLORS.textMuted} />
                 <Text style={styles.summaryPillText}>
-                  {selectedWorkout.exercises.length} exercise{selectedWorkout.exercises.length !== 1 ? 's' : ''}
+                  {dayExercises.length} exercise{dayExercises.length !== 1 ? 's' : ''}
                 </Text>
               </View>
               <View style={styles.summaryPill}>
@@ -100,7 +99,7 @@ export default function CalendarScreen({ navigation }) {
               </View>
             </View>
 
-            {selectedWorkout.exercises.map((ex, i) => (
+            {dayExercises.map((ex, i) => (
               <TouchableOpacity
                 key={i}
                 style={styles.exerciseCard}

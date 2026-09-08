@@ -9,12 +9,15 @@ import {
   KeyboardAvoidingView,
   InputAccessoryView,
   Keyboard,
+  Modal,
+  Pressable,
   Platform,
 } from 'react-native';
+import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { saveWorkout, updateWorkout, getWorkouts } from '../storage/storage';
 import { generateId, getTodayString, formatDate } from '../utils/helpers';
-import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { COLORS, LAYOUT, SHADOWS, CALENDAR_THEME } from '../utils/theme';
 import { useUnit } from '../context/UnitContext';
 import { showAlert } from '../components/AlertHost';
 
@@ -47,7 +50,8 @@ export default function LogWorkoutScreen({ navigation, route }) {
   const [exerciseSuggestions, setExerciseSuggestions] = useState(BASE_EXERCISES);
   const scrollRef = useRef(null);
   const today = getTodayString();
-  const displayDate = editingWorkout?.date ?? today;
+  const [workoutDate, setWorkoutDate] = useState(editingWorkout?.date ?? today);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     getWorkouts().then((workouts) => {
@@ -131,7 +135,7 @@ export default function LogWorkoutScreen({ navigation, route }) {
     }
     const workout = {
       id: editingWorkout?.id ?? generateId(),
-      date: editingWorkout?.date ?? today,
+      date: workoutDate,
       exercises: exercises.map((ex) => ({
         name: ex.name,
         sets: ex.sets.map((s) => ({
@@ -161,11 +165,25 @@ export default function LogWorkoutScreen({ navigation, route }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Date header */}
-        <View style={styles.dateHeader}>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.textMuted} />
-          <Text style={styles.dateHeading}>{formatDate(displayDate)}</Text>
-        </View>
+        {/* Date header — tap to change the day this workout is filed under */}
+        <TouchableOpacity
+          style={styles.dateHeader}
+          onPress={() => setShowDatePicker(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Workout date: ${formatDate(workoutDate)}. Tap to change.`}
+        >
+          <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
+          <Text style={styles.dateHeading}>{formatDate(workoutDate)}</Text>
+          {workoutDate !== today && (
+            <View style={styles.datePill}>
+              <Text style={styles.datePillText}>
+                {workoutDate > today ? 'Future' : 'Past'}
+              </Text>
+            </View>
+          )}
+          <Ionicons name="chevron-down" size={14} color={COLORS.textMuted} />
+        </TouchableOpacity>
 
         {exercises.map((exercise) => (
           <View key={exercise.id} style={styles.exerciseCard}>
@@ -315,6 +333,47 @@ export default function LogWorkoutScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
+      <Modal
+        visible={showDatePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <Pressable style={styles.pickerBackdrop} onPress={() => setShowDatePicker(false)}>
+          <Pressable style={styles.pickerCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.pickerTitle}>Workout date</Text>
+            <Calendar
+              current={workoutDate}
+              onDayPress={(day) => {
+                setWorkoutDate(day.dateString);
+                setShowDatePicker(false);
+              }}
+              markedDates={{
+                [workoutDate]: { selected: true, selectedColor: COLORS.primary },
+              }}
+              theme={CALENDAR_THEME}
+            />
+            <View style={styles.pickerActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  setWorkoutDate(today);
+                  setShowDatePicker(false);
+                }}
+                style={styles.pickerTodayBtn}
+              >
+                <Text style={styles.pickerTodayText}>Today</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(false)}
+                style={styles.pickerCancelBtn}
+              >
+                <Text style={styles.pickerCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {Platform.OS === 'ios' && (
         <InputAccessoryView nativeID={KEYBOARD_ACCESSORY_ID}>
           <View style={styles.keyboardBar}>
@@ -345,6 +404,72 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
+  },
+  datePill: {
+    backgroundColor: COLORS.primarySoft,
+    borderRadius: LAYOUT.pillRadius,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  datePillText: {
+    color: COLORS.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: COLORS.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  pickerCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: COLORS.surface,
+    borderRadius: LAYOUT.cardRadius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+    ...SHADOWS.card,
+  },
+  pickerTitle: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  pickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 12,
+  },
+  pickerTodayBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: LAYOUT.pillRadius,
+    backgroundColor: COLORS.primary,
+  },
+  pickerTodayText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  pickerCancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: LAYOUT.pillRadius,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pickerCancelText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   exerciseCard: {
