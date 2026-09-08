@@ -151,9 +151,32 @@ Track off-plan meals or snacks by date and review recent entries.
 
 ## Data Storage
 
-The app stores workout and cheat day data locally using AsyncStorage — on-device on iOS and Android, and in `localStorage` in the browser. No backend or account setup is required.
+The app stores workout and cheat day data locally using AsyncStorage — on-device
+on iOS and Android, and in `localStorage` in the browser. No backend or account
+setup is required.
 
-Because storage is per-device and per-browser, use **Settings → Export Backup** to move data between them.
+Storage is per-device, and on the web it is per-origin. Three consequences worth
+knowing:
+
+- The native app and the website never share data. They are separate stores.
+- On iOS, a site added to the Home Screen gets its own storage container,
+  separate from Safari. Workouts logged in the Safari tab do not appear in the
+  installed app, and vice versa — pick one and stay in it.
+- Clearing website data in the browser deletes the history.
+
+Use **Settings → Export Backup** to move data between devices, and as a periodic
+backup. It writes a JSON file that **Import Backup** reads on any platform.
+
+## Home-screen install
+
+`public/index.html` carries the `apple-touch-icon`, web manifest and
+`apple-mobile-web-app-*` tags that iOS needs for a proper installed icon; Expo
+uses that file as the HTML template and copies `public/` into the build. iOS
+ignores `<link rel="icon">` for the Home Screen, so without the touch icon
+Safari draws a plain letter tile.
+
+iOS caches the icon per URL. After changing it, remove the shortcut and re-add
+it from Safari — an existing shortcut keeps the old artwork.
 
 ## Scripts
 
