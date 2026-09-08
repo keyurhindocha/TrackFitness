@@ -15,7 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { getCheatDays, saveCheatDay, deleteCheatDay } from '../storage/storage';
-import { generateId, getTodayString, formatDate, getMonthKey, getWeekStart } from '../utils/helpers';
+import { generateId, getTodayString, formatDate, getMonthKey, getWeekStart, parseDateString, toDateString } from '../utils/helpers';
 import { COLORS, CALENDAR_THEME, LAYOUT, SHADOWS } from '../utils/theme';
 import { showAlert } from '../components/AlertHost';
 
@@ -159,9 +159,9 @@ export default function CheatScreen() {
   const weekStart = getWeekStart(today);
   const thisWeekEntries = cheatDays.filter((e) => e.date >= weekStart && e.date <= today);
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart);
+    const d = parseDateString(weekStart);
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = toDateString(d);
     const entry = cheatDays.find((e) => e.date === dateStr);
     return { dateStr, entry };
   });
