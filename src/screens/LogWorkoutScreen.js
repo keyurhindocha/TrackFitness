@@ -16,7 +16,15 @@ import {
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { saveWorkout, updateWorkout, getWorkouts } from '../storage/storage';
-import { generateId, getTodayString, formatDate } from '../utils/helpers';
+import {
+  generateId,
+  getTodayString,
+  formatDate,
+  formatSet,
+  describeDaysAgo,
+  getExerciseStats,
+  isSetPR,
+} from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS, CALENDAR_THEME } from '../utils/theme';
 import { useUnit } from '../context/UnitContext';
 import { showAlert } from '../components/AlertHost';
@@ -41,6 +49,7 @@ export default function LogWorkoutScreen({ navigation, route }) {
           sets: ex.sets.map((s) => ({
             weight: s.weight > 0 ? String(s.weight) : '',
             reps: s.reps > 0 ? String(s.reps) : '',
+            carried: false,
           })),
         }))
       : []
@@ -48,6 +57,7 @@ export default function LogWorkoutScreen({ navigation, route }) {
   const [showInput, setShowInput] = useState(false);
   const [newName, setNewName] = useState('');
   const [exerciseSuggestions, setExerciseSuggestions] = useState(BASE_EXERCISES);
+  const [history, setHistory] = useState([]);
   const scrollRef = useRef(null);
   const today = getTodayString();
   const [workoutDate, setWorkoutDate] = useState(editingWorkout?.date ?? today);
@@ -55,32 +65,56 @@ export default function LogWorkoutScreen({ navigation, route }) {
 
   useEffect(() => {
     getWorkouts().then((workouts) => {
+      setHistory(workouts);
       const past = workouts.flatMap((w) => w.exercises.map((e) => e.name));
       const merged = Array.from(new Set([...past, ...BASE_EXERCISES]));
       setExerciseSuggestions(merged);
     });
   }, []);
 
+  // Weight to add for a one-tap overload, sized to the plates you actually have.
+  const INCREMENTS = unit === 'kg' ? [1, 2.5] : [2.5, 5];
+
+  const statsFor = (name) => getExerciseStats(history, name, editingWorkout?.id);
+
+  const setsFromLast = (name, delta) => {
+    const { lastSession } = statsFor(name);
+    if (!lastSession) return null;
+    return lastSession.sets.map((s) => {
+      const weight = Math.round(((Number(s.weight) || 0) + delta) * 100) / 100;
+      return {
+        weight: weight > 0 ? String(weight) : '',
+        reps: String(Number(s.reps) || 0),
+        carried: false,
+      };
+    });
+  };
+
+  const applyFromLast = (exerciseId, name, delta) => {
+    const sets = setsFromLast(name, delta);
+    if (!sets) return;
+    setExercises((prev) =>
+      prev.map((ex) => (ex.id === exerciseId ? { ...ex, sets } : ex))
+    );
+  };
+
   const addExercise = async (name) => {
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    // Look up the most recent sets for this exercise to pre-populate
+    // Carry last session's numbers in as a starting point. They are marked
+    // `carried` so they render muted until you confirm or change them —
+    // otherwise last week's weights look exactly like today's effort.
     let previousSets = [];
     try {
-      const allWorkouts = await getWorkouts();
-      const sorted = [...allWorkouts].sort((a, b) => b.date.localeCompare(a.date));
-      for (const workout of sorted) {
-        const match = workout.exercises.find(
-          (e) => e.name.trim().toLowerCase() === trimmed.toLowerCase()
-        );
-        if (match && match.sets.length > 0) {
-          previousSets = match.sets.map((s) => ({
-            weight: s.weight > 0 ? String(s.weight) : '',
-            reps: s.reps > 0 ? String(s.reps) : '',
-          }));
-          break;
-        }
+      const workouts = history.length ? history : await getWorkouts();
+      const { lastSession } = getExerciseStats(workouts, trimmed, editingWorkout?.id);
+      if (lastSession) {
+        previousSets = lastSession.sets.map((s) => ({
+          weight: s.weight > 0 ? String(s.weight) : '',
+          reps: s.reps > 0 ? String(s.reps) : '',
+          carried: true,
+        }));
       }
     } catch (_) {
       // If lookup fails, just start with empty sets
@@ -102,7 +136,7 @@ export default function LogWorkoutScreen({ navigation, route }) {
       prev.map((ex) => {
         if (ex.id !== exerciseId) return ex;
         const last = ex.sets.length > 0 ? ex.sets[ex.sets.length - 1] : { weight: '', reps: '' };
-        return { ...ex, sets: [...ex.sets, { weight: last.weight, reps: last.reps }] };
+        return { ...ex, sets: [...ex.sets, { weight: last.weight, reps: last.reps, carried: false }] };
       })
     );
   };
@@ -122,7 +156,7 @@ export default function LogWorkoutScreen({ navigation, route }) {
       prev.map((ex) => {
         if (ex.id !== exerciseId) return ex;
         const sets = [...ex.sets];
-        sets[setIdx] = { ...sets[setIdx], [field]: value };
+        sets[setIdx] = { ...sets[setIdx], [field]: value, carried: false };
         return { ...ex, sets };
       })
     );
@@ -185,12 +219,21 @@ export default function LogWorkoutScreen({ navigation, route }) {
           <Ionicons name="chevron-down" size={14} color={COLORS.textMuted} />
         </TouchableOpacity>
 
-        {exercises.map((exercise) => (
+        {exercises.map((exercise) => {
+          const stats = statsFor(exercise.name);
+          const hasPR = exercise.sets.some((s) => isSetPR(s, stats));
+          return (
           <View key={exercise.id} style={styles.exerciseCard}>
             <View style={styles.exerciseHeader}>
               <View style={styles.exerciseNameRow}>
                 <View style={styles.exerciseAccent} />
                 <Text style={styles.exerciseName}>{exercise.name}</Text>
+                {hasPR && (
+                  <View style={styles.prChip}>
+                    <Ionicons name="trophy" size={10} color={COLORS.highlight} />
+                    <Text style={styles.prChipText}>PR</Text>
+                  </View>
+                )}
               </View>
               <TouchableOpacity
                 onPress={() => removeExercise(exercise.id)}
@@ -201,6 +244,46 @@ export default function LogWorkoutScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
+            {stats.lastSession && (
+              <View style={styles.lastPanel}>
+                <View style={styles.lastHeaderRow}>
+                  <Ionicons name="time-outline" size={12} color={COLORS.textMuted} />
+                  <Text style={styles.lastHeaderText}>
+                    Last time · {formatDate(stats.lastSession.date)} ({describeDaysAgo(stats.lastSession.date)})
+                  </Text>
+                </View>
+                <Text style={styles.lastSetsText}>
+                  {stats.lastSession.sets.map((s) => formatSet(s, unit)).join('  ·  ')}
+                </Text>
+                <Text style={styles.lastBestText}>
+                  Best: {stats.bestWeight > 0 ? `${stats.bestWeight} ${unit} × ` : ''}
+                  {stats.bestRepsAtBestWeight} reps
+                </Text>
+
+                <View style={styles.overloadRow}>
+                  <TouchableOpacity
+                    style={styles.overloadChip}
+                    onPress={() => applyFromLast(exercise.id, exercise.name, 0)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.overloadChipText}>Repeat</Text>
+                  </TouchableOpacity>
+                  {INCREMENTS.map((inc) => (
+                    <TouchableOpacity
+                      key={inc}
+                      style={[styles.overloadChip, styles.overloadChipStrong]}
+                      onPress={() => applyFromLast(exercise.id, exercise.name, inc)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.overloadChipText, styles.overloadChipTextStrong]}>
+                        +{inc} {unit}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
             {exercise.sets.length > 0 && (
               <View style={styles.setsTableHeader}>
                 <Text style={[styles.colLabel, styles.colSet]}>SET</Text>
@@ -210,13 +293,20 @@ export default function LogWorkoutScreen({ navigation, route }) {
               </View>
             )}
 
-            {exercise.sets.map((set, si) => (
+            {exercise.sets.map((set, si) => {
+              const pr = isSetPR(set, stats);
+              const inputStyle = [
+                styles.setInput,
+                set.carried && styles.setInputCarried,
+                pr && styles.setInputPR,
+              ];
+              return (
               <View key={si} style={styles.setRow}>
-                <View style={[styles.setNumWrap, styles.colSet]}>
-                  <Text style={styles.setNum}>{si + 1}</Text>
+                <View style={[styles.setNumWrap, styles.colSet, pr && styles.setNumWrapPR]}>
+                  <Text style={[styles.setNum, pr && styles.setNumPR]}>{si + 1}</Text>
                 </View>
                 <TextInput
-                  style={[styles.setInput, styles.colWeight]}
+                  style={[...inputStyle, styles.colWeight]}
                   placeholder="0"
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="decimal-pad"
@@ -227,7 +317,7 @@ export default function LogWorkoutScreen({ navigation, route }) {
                   inputAccessoryViewID={Platform.OS === 'ios' ? KEYBOARD_ACCESSORY_ID : undefined}
                 />
                 <TextInput
-                  style={[styles.setInput, styles.colReps]}
+                  style={[...inputStyle, styles.colReps]}
                   placeholder="0"
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="number-pad"
@@ -244,14 +334,16 @@ export default function LogWorkoutScreen({ navigation, route }) {
                   <Ionicons name="remove-circle-outline" size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
-            ))}
+              );
+            })}
 
             <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exercise.id)} activeOpacity={0.7}>
               <Ionicons name="add" size={15} color={COLORS.primary} />
               <Text style={styles.addSetText}>Add Set</Text>
             </TouchableOpacity>
           </View>
-        ))}
+          );
+        })}
 
         {showInput ? (
           <View style={styles.inputCard}>
@@ -507,6 +599,100 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  prChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: COLORS.highlightSoft,
+    borderRadius: LAYOUT.pillRadius,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  prChipText: {
+    color: COLORS.highlight,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
+  lastPanel: {
+    backgroundColor: COLORS.backgroundSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+    marginBottom: 14,
+  },
+  lastHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  lastHeaderText: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    flexShrink: 1,
+  },
+  lastSetsText: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 6,
+  },
+  lastBestText: {
+    color: COLORS.highlight,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  overloadRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  overloadChip: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: LAYOUT.pillRadius,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+  },
+  overloadChipStrong: {
+    backgroundColor: COLORS.primarySoft,
+    borderColor: COLORS.primary,
+  },
+  overloadChipText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  overloadChipTextStrong: {
+    color: COLORS.primary,
+  },
+
+  setInputCarried: {
+    color: COLORS.textMuted,
+    borderStyle: 'dashed',
+  },
+  setInputPR: {
+    borderColor: COLORS.highlight,
+    backgroundColor: COLORS.highlightSoft,
+    color: COLORS.text,
+    borderStyle: 'solid',
+  },
+  setNumWrapPR: {
+    backgroundColor: COLORS.highlightSoft,
+  },
+  setNumPR: {
+    color: COLORS.highlight,
   },
 
   setsTableHeader: {

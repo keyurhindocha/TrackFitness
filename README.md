@@ -75,7 +75,14 @@ at build time.
 **Training**
 
 - Log a workout as exercises → sets → `reps × weight`
-- Edit or delete any past session
+- Last session's numbers carried in, shown muted until you confirm them
+- A **Last time** panel on every exercise: what you lifted, how long ago, and
+  the best you have ever hit
+- One-tap overload — **Repeat**, **+2.5**, **+5** (or **+1**, **+2.5** in kg)
+  rebuilds the whole exercise from last session at the new weight
+- **PR** flags as you type, when a set beats your heaviest ever or matches it
+  for more reps
+- Edit or delete any past session, including its date
 - Autocomplete that merges a built-in exercise list with everything you have logged
 - History grouped by date, expandable session by session
 

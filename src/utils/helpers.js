@@ -93,3 +93,81 @@ export const getWeeklyVolume = (workouts, weeks = 8) => {
 // between sets, never mid-phrase ("27.5 lbs × 7" / "reps").
 export const formatSet = (set, unit) =>
   `${set.weight}\u00a0${unit}\u00a0\u00d7\u00a0${set.reps}\u00a0reps`;
+
+// Whole-day difference between a date string and today, in local time.
+export const daysAgo = (dateString) => {
+  const then = parseDateString(dateString).getTime();
+  const now = parseDateString(getTodayString()).getTime();
+  return Math.round((now - then) / 86400000);
+};
+
+export const describeDaysAgo = (dateString) => {
+  const days = daysAgo(dateString);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 14) return `${days} days ago`;
+  if (days < 60) return `${Math.round(days / 7)} weeks ago`;
+  return `${Math.round(days / 30)} months ago`;
+};
+
+// What this exercise looked like last time, and the bar to beat.
+// `excludeWorkoutId` drops the session being edited, so editing a workout
+// does not measure it against itself.
+export const getExerciseStats = (workouts, exerciseName, excludeWorkoutId = null) => {
+  const key = exerciseName.trim().toLowerCase();
+  const empty = {
+    hasHistory: false,
+    lastSession: null,
+    bestWeight: 0,
+    bestRepsAtBestWeight: 0,
+  };
+  if (!key) return empty;
+
+  const sorted = workouts
+    .filter((w) => w.id !== excludeWorkoutId)
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  let lastSession = null;
+  let bestWeight = 0;
+  let bestRepsAtBestWeight = 0;
+  let seen = false;
+
+  sorted.forEach((workout) => {
+    workout.exercises.forEach((ex) => {
+      if (ex.name.trim().toLowerCase() !== key) return;
+      const sets = ex.sets.filter((s) => (Number(s.reps) || 0) > 0);
+      if (sets.length === 0) return;
+
+      seen = true;
+      if (!lastSession) lastSession = { date: workout.date, sets };
+
+      sets.forEach((s) => {
+        const weight = Number(s.weight) || 0;
+        const reps = Number(s.reps) || 0;
+        // Bodyweight work stays comparable: weight is 0 on both sides, so the
+        // rep count is what moves.
+        if (weight > bestWeight) {
+          bestWeight = weight;
+          bestRepsAtBestWeight = reps;
+        } else if (weight === bestWeight && reps > bestRepsAtBestWeight) {
+          bestRepsAtBestWeight = reps;
+        }
+      });
+    });
+  });
+
+  return { hasHistory: seen, lastSession, bestWeight, bestRepsAtBestWeight };
+};
+
+// A set beats the record if it is heavier than anything logged before, or
+// matches the best weight for more reps. Never flags the first ever session,
+// where there is nothing to beat.
+export const isSetPR = (set, stats) => {
+  if (!stats || !stats.hasHistory) return false;
+  const weight = parseFloat(set.weight) || 0;
+  const reps = parseInt(set.reps, 10) || 0;
+  if (reps <= 0) return false;
+  if (weight > stats.bestWeight) return true;
+  return weight === stats.bestWeight && reps > stats.bestRepsAtBestWeight;
+};
