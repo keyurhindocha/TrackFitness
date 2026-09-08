@@ -2,6 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../utils/theme';
 
 import WorkoutsScreen from '../screens/WorkoutsScreen';
@@ -89,6 +90,15 @@ const TAB_ICONS = {
 };
 
 export default function AppNavigator() {
+  const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === 'web';
+
+  // On the web the browser reports the home-indicator area through
+  // env(safe-area-inset-bottom); without reserving it the labels are pushed
+  // into the indicator and the bar reads as squashed. Native keeps the fixed
+  // heights it already had.
+  const barHeight = Platform.OS === 'ios' ? 84 : isWeb ? 60 + insets.bottom : 64;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -98,14 +108,15 @@ export default function AppNavigator() {
           borderTopColor: COLORS.border,
           borderTopWidth: 0.5,
           paddingTop: 6,
-          height: Platform.OS === 'ios' ? 84 : 64,
+          paddingBottom: isWeb ? insets.bottom : 0,
+          height: barHeight,
         },
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
-          marginBottom: Platform.OS === 'ios' ? 0 : 6,
+          marginBottom: Platform.OS === 'ios' ? 0 : isWeb ? 4 : 6,
         },
         tabBarIcon: ({ color, size }) => (
           <Ionicons name={TAB_ICONS[route.name]} size={24} color={color} />

@@ -398,8 +398,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   colSet: { width: 38 },
-  colWeight: { flex: 1, marginRight: 8 },
-  colReps: { flex: 1, marginRight: 8 },
+  // `minWidth: 0` lets these shrink below the input's intrinsic content width.
+  // On the web an <input> is a flex item with `min-width: auto`, so without this
+  // the weight and reps fields refuse to shrink and REPS is pushed off-screen.
+  // React Native already defaults minWidth to 0, so native layout is unchanged.
+  // textAlign centres the column headings over the values, which are centred.
+  colWeight: { flex: 1, minWidth: 0, marginRight: 8, textAlign: 'center' },
+  colReps: { flex: 1, minWidth: 0, marginRight: 8, textAlign: 'center' },
   colDelete: { width: 32, alignItems: 'center' },
 
   setRow: {
