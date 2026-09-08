@@ -75,3 +75,9 @@ export const getWeeklyVolume = (workouts, weeks = 8) => {
   }
   return result;
 };
+
+// Renders one set as "27.5 lbs × 7 reps".
+// Non-breaking spaces keep a set together, so a list of sets only ever wraps
+// between sets, never mid-phrase ("27.5 lbs × 7" / "reps").
+export const formatSet = (set, unit) =>
+  `${set.weight}\u00a0${unit}\u00a0\u00d7\u00a0${set.reps}\u00a0reps`;

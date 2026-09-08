@@ -12,9 +12,10 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts, deleteWorkout } from '../storage/storage';
-import { formatDate } from '../utils/helpers';
+import { formatDate, formatSet } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 import { showAlert } from '../components/AlertHost';
+import { useUnit } from '../context/UnitContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -28,6 +29,7 @@ const exerciseTitle = (exercises) => {
 };
 
 export default function WorkoutsScreen({ navigation }) {
+  const { unit } = useUnit();
   const [workouts, setWorkouts] = useState([]);
   const [expanded, setExpanded] = useState(null);
 
@@ -143,7 +145,7 @@ export default function WorkoutsScreen({ navigation }) {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.exerciseName}>{ex.name}</Text>
                     <Text style={styles.setsText}>
-                      {ex.sets.map((s) => `${s.weight} × ${s.reps}`).join('  ·  ')}
+                      {ex.sets.map((s) => formatSet(s, unit)).join('  ·  ')}
                     </Text>
                   </View>
                 </View>
