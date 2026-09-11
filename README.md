@@ -94,8 +94,12 @@ at build time.
 
 **Nutrition, honestly**
 
-- A cheat log with quick tags — Cookie, Cake, Chocolate, Ice Cream
-- Per-day entries you can review on the same calendar view
+- A cheat log built for the moment it happens: the composer is always at the
+  top of the page, so the keyboard can never cover it
+- Quick tags — Cookie, Cake, Chocolate, Ice Cream — that double as one-tap entries
+- A **clean streak**, your best streak, and a seven-dot week strip: green for
+  clean, red for a slip, outlined for days still to come
+- A month calendar with every cheat marked, and a complete history newest first
 
 **Your data**
 
@@ -136,8 +140,12 @@ feedback.
 
 ### Cheat Log
 
-The counterweight. Add what you ate, tag it, review it by date. No calories, no
-macros, no lecture — just a record of the treats so the pattern is visible.
+The counterweight, built around one job: writing a slip down the moment it
+happens. The composer sits at the top — type what it was, tap a tag, log — and
+the page below it makes the pattern visible: a clean-day streak in green (red
+the day it resets), a week strip of dots, a month calendar, and every entry
+ever logged, newest first. Tap any day to log against it. No calories, no
+macros, no lecture.
 
 ### Data & Backup
 

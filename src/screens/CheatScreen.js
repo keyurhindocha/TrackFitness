@@ -1,23 +1,34 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Pressable,
   TextInput,
   ScrollView,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { getCheatDays, saveCheatDay, deleteCheatDay } from '../storage/storage';
-import { generateId, getTodayString, formatDate, getMonthKey, getWeekStart, parseDateString, toDateString } from '../utils/helpers';
+import {
+  generateId,
+  getTodayString,
+  formatDate,
+  getMonthKey,
+  getWeekStart,
+  parseDateString,
+  toDateString,
+  getCleanStreaks,
+} from '../utils/helpers';
 import { COLORS, CALENDAR_THEME, LAYOUT, SHADOWS } from '../utils/theme';
 import { showAlert } from '../components/AlertHost';
+
+// The page is laid out for one job: writing down a slip the moment it happens.
+// The composer sits at the top so the keyboard, which rises from the bottom,
+// can never cover it — on a phone browser or a native build. Everything below
+// it is there to make the pattern visible: a clean streak, the week at a
+// glance, a month calendar, and a complete history.
 
 const TAGS = [
   { key: 'cookie', label: 'Cookie', color: COLORS.highlight, icon: 'cafe-outline' },
@@ -26,155 +37,172 @@ const TAGS = [
   { key: 'ice-cream', label: 'Ice Cream', color: COLORS.primary, icon: 'ice-cream-outline' },
 ];
 
-const getTagInfo = (key) => TAGS.find((t) => t.key === key) || { label: key, color: COLORS.textMuted, icon: 'ellipse-outline' };
+const OTHER_TAG = { label: 'Other', color: COLORS.textSecondary, icon: 'ellipse-outline' };
 
-// Normalize items: legacy strings → objects
+const getTagInfo = (key) => TAGS.find((t) => t.key === key) || OTHER_TAG;
+
+// Items were plain strings in early versions; treat those as untagged.
 const normalizeItem = (item) =>
   typeof item === 'string' ? { text: item, tag: null } : item;
 
-const isSameLabel = (text, label) =>
-  text?.trim().toLowerCase() === label?.trim().toLowerCase();
+const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+const monthLabel = (dateString) =>
+  parseDateString(dateString).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
 export default function CheatScreen() {
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
   const [cheatDays, setCheatDays] = useState([]);
-  const [markedDates, setMarkedDates] = useState({});
   const [selectedDate, setSelectedDate] = useState(getTodayString());
-  const [selectedCheatDay, setSelectedCheatDay] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [newItem, setNewItem] = useState('');
-  const [selectedTag, setSelectedTag] = useState(null);
-  const [weekView, setWeekView] = useState(false);
-  const [detailCardY, setDetailCardY] = useState(0);
+  const [text, setText] = useState('');
+  const [tag, setTag] = useState(null);
+  const [dayCardY, setDayCardY] = useState(0);
+  const [justLogged, setJustLogged] = useState(null);
+
+  const today = getTodayString();
 
   useFocusEffect(
     useCallback(() => {
-      loadData(getTodayString());
+      getCheatDays().then(setCheatDays);
     }, [])
   );
 
-  const loadData = async (dateOverride) => {
-    const data = await getCheatDays();
-    setCheatDays(data);
+  // ── Derived data ──────────────────────────────────────────────────────────
 
-    const marks = {};
-    data.forEach((entry) => {
-      marks[entry.date] = { marked: true, dotColor: COLORS.danger };
+  const byDate = useMemo(() => {
+    const map = {};
+    cheatDays.forEach((entry) => {
+      map[entry.date] = { ...entry, items: (entry.items || []).map(normalizeItem) };
     });
-    setMarkedDates(marks);
+    return map;
+  }, [cheatDays]);
 
-    const targetDate = dateOverride || selectedDate;
-    setSelectedCheatDay(data.find((entry) => entry.date === targetDate) || null);
+  const history = useMemo(
+    () => Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date)),
+    [byDate]
+  );
+
+  const streaks = useMemo(() => getCleanStreaks(Object.keys(byDate)), [byDate]);
+
+  const weekDays = useMemo(() => {
+    const start = getWeekStart(today);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = parseDateString(start);
+      d.setDate(d.getDate() + i);
+      const date = toDateString(d);
+      return {
+        date,
+        letter: WEEKDAY_LETTERS[i],
+        isToday: date === today,
+        isFuture: date > today,
+        cheated: !!byDate[date],
+      };
+    });
+  }, [byDate, today]);
+
+  const thisMonth = getMonthKey(today);
+  const monthEntries = history.filter((e) => getMonthKey(e.date) === thisMonth);
+  const monthCheats = monthEntries.reduce((n, e) => n + e.items.length, 0);
+
+  const tagCounts = useMemo(() => {
+    const counts = {};
+    monthEntries.forEach((e) =>
+      e.items.forEach((item) => {
+        const key = item.tag || 'other';
+        counts[key] = (counts[key] || 0) + 1;
+      })
+    );
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [monthEntries]);
+
+  const markedDates = useMemo(() => {
+    const marks = {};
+    Object.keys(byDate).forEach((date) => {
+      marks[date] = { marked: true, dotColor: COLORS.danger };
+    });
+    marks[selectedDate] = {
+      ...(marks[selectedDate] || {}),
+      selected: true,
+      selectedColor: COLORS.primaryStrong,
+    };
+    return marks;
+  }, [byDate, selectedDate]);
+
+  const selectedDay = byDate[selectedDate] || null;
+  const loggingForToday = selectedDate === today;
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  const persist = async (entry) => {
+    await saveCheatDay(entry);
+    setCheatDays(await getCheatDays());
   };
 
-  const handleDayPress = (day) => {
-    setSelectedDate(day.dateString);
-    const found = cheatDays.find((entry) => entry.date === day.dateString);
-    setSelectedCheatDay(found || null);
-  };
-
-  const handleAddItem = async () => {
-    const trimmed = newItem.trim();
+  const handleLog = async () => {
+    const trimmed = text.trim();
     if (!trimmed) return;
 
-    const newEntry = { text: trimmed, tag: selectedTag };
-    const existing = cheatDays.find((entry) => entry.date === selectedDate);
-    const existingItems = existing ? existing.items.map(normalizeItem) : [];
-    const updated = existing
-      ? { ...existing, items: [...existingItems, newEntry] }
-      : { id: generateId(), date: selectedDate, items: [newEntry] };
+    const item = { text: trimmed, tag };
+    const existing = selectedDay;
+    await persist(
+      existing
+        ? { ...existing, items: [...existing.items, item] }
+        : { id: generateId(), date: selectedDate, items: [item] }
+    );
 
-    await saveCheatDay(updated);
-    setNewItem('');
-    setSelectedTag(null);
-    setShowModal(false);
-    await loadData(selectedDate);
+    setText('');
+    setTag(null);
+    setJustLogged(trimmed);
+    setTimeout(() => setJustLogged(null), 2500);
   };
 
-  const handleTagPress = (tag) => {
-    const isDeselecting = selectedTag === tag.key;
-    const tagLabel = tag.label;
-
-    setSelectedTag(isDeselecting ? null : tag.key);
-    setNewItem((current) => {
+  const handleTagPress = (t) => {
+    const deselecting = tag === t.key;
+    setTag(deselecting ? null : t.key);
+    // A tag doubles as a one-tap entry: with nothing typed, its label becomes
+    // the text. Typing over it is fine; it is only a starting point.
+    setText((current) => {
       const trimmed = current.trim();
-      if (isDeselecting) {
-        return trimmed === tagLabel ? '' : current;
-      }
-      return trimmed ? current : tagLabel;
+      if (deselecting) return trimmed === t.label ? '' : current;
+      return trimmed ? current : t.label;
     });
   };
 
   const handleDeleteItem = async (index) => {
-    if (!selectedCheatDay) return;
-
-    const items = selectedCheatDay.items.map(normalizeItem);
-    const newItems = items.filter((_, i) => i !== index);
-    if (newItems.length === 0) {
+    if (!selectedDay) return;
+    const items = selectedDay.items.filter((_, i) => i !== index);
+    if (items.length === 0) {
       await deleteCheatDay(selectedDate);
+      setCheatDays(await getCheatDays());
     } else {
-      await saveCheatDay({ ...selectedCheatDay, items: newItems });
+      await persist({ ...selectedDay, items });
     }
-    await loadData(selectedDate);
   };
 
   const confirmDeleteItem = (index) => {
-    const item = selectedCheatDay?.items?.map(normalizeItem)[index];
-    const itemLabel = item?.text || 'this cheat';
-
-    showAlert(
-      'Delete cheat?',
-      `Remove "${itemLabel}" from ${formatDate(selectedDate)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteItem(index) },
-      ]
-    );
+    const label = selectedDay?.items[index]?.text || 'this cheat';
+    showAlert('Delete cheat?', `Remove "${label}" from ${formatDate(selectedDate)}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => handleDeleteItem(index) },
+    ]);
   };
 
-  const focusEntry = (entry) => {
-    setSelectedDate(entry.date);
-    setSelectedCheatDay(entry);
-    setWeekView(false);
-    scrollRef.current?.scrollTo({
-      y: Math.max(detailCardY - 16, 0),
-      animated: true,
-    });
+  const selectDay = (date) => setSelectedDate(date);
+
+  const jumpToDay = (date) => {
+    setSelectedDate(date);
+    scrollRef.current?.scrollTo({ y: Math.max(dayCardY - 12, 0), animated: true });
   };
 
-  const selected = {
-    ...markedDates,
-    [selectedDate]: {
-      ...(markedDates[selectedDate] || {}),
-      selected: true,
-      selectedColor: COLORS.primaryStrong,
-    },
+  const focusComposer = () => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    setTimeout(() => inputRef.current?.focus(), 250);
   };
 
-  const currentMonth = getMonthKey(selectedDate);
-  const monthCount = cheatDays.filter((e) => getMonthKey(e.date) === currentMonth).length;
+  // ── Render ────────────────────────────────────────────────────────────────
 
-  // Weekly patterns: last 7 days
-  const today = getTodayString();
-  const weekStart = getWeekStart(today);
-  const thisWeekEntries = cheatDays.filter((e) => e.date >= weekStart && e.date <= today);
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const d = parseDateString(weekStart);
-    d.setDate(d.getDate() + i);
-    const dateStr = toDateString(d);
-    const entry = cheatDays.find((e) => e.date === dateStr);
-    return { dateStr, entry };
-  });
-
-  // Tag breakdown for the month
-  const monthEntries = cheatDays.filter((e) => getMonthKey(e.date) === currentMonth);
-  const tagCounts = {};
-  monthEntries.forEach((e) => {
-    e.items.map(normalizeItem).forEach((item) => {
-      const tag = item.tag || 'untagged';
-      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-    });
-  });
+  const hasAnyHistory = history.length > 0;
 
   return (
     <ScrollView
@@ -183,40 +211,68 @@ export default function CheatScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="interactive"
-      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="on-drag"
     >
-      <View style={styles.heroCard}>
-        <Text style={styles.heroEyebrow}>Cheat Log</Text>
-        <Text style={styles.heroTitle}>Log every cheat, stay accountable.</Text>
-        <Text style={styles.heroSubtitle}>
-          Name the treat, tag what it was. No macros, no judgment — just honesty.
-        </Text>
-
-        <View style={styles.heroStats}>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{cheatDays.length}</Text>
-            <Text style={styles.heroStatLabel}>Cheat days</Text>
+      {/* ── Streak + week at a glance ─────────────────────────────────────── */}
+      <View style={styles.statsCard}>
+        <View style={styles.statsRow}>
+          <View style={styles.statHero}>
+            <Text style={styles.statEyebrow}>Clean streak</Text>
+            {streaks.current === null ? (
+              <Text style={styles.statHeroValueMuted}>—</Text>
+            ) : (
+              <Text style={[styles.statHeroValue, streaks.current === 0 && styles.statHeroValueZero]}>
+                {streaks.current}
+                <Text style={styles.statHeroUnit}> {streaks.current === 1 ? 'day' : 'days'}</Text>
+              </Text>
+            )}
           </View>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{monthCount}</Text>
-            <Text style={styles.heroStatLabel}>This month</Text>
+          <View style={styles.statSide}>
+            <Text style={styles.statSideValue}>{streaks.best ?? '—'}</Text>
+            <Text style={styles.statSideLabel}>best streak</Text>
           </View>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{thisWeekEntries.length}</Text>
-            <Text style={styles.heroStatLabel}>This week</Text>
+          <View style={styles.statSide}>
+            <Text style={[styles.statSideValue, monthCheats > 0 && { color: COLORS.danger }]}>
+              {monthCheats}
+            </Text>
+            <Text style={styles.statSideLabel}>this month</Text>
           </View>
         </View>
 
-        {/* Tag breakdown */}
-        {Object.keys(tagCounts).length > 0 && (
+        <View style={styles.weekStrip}>
+          {weekDays.map((d) => (
+            <TouchableOpacity
+              key={d.date}
+              style={styles.weekCell}
+              onPress={() => jumpToDay(d.date)}
+              disabled={d.isFuture}
+              activeOpacity={0.7}
+              accessibilityLabel={`${formatDate(d.date)}: ${
+                d.isFuture ? 'upcoming' : d.cheated ? 'cheat logged' : 'clean'
+              }`}
+            >
+              <Text style={[styles.weekLetter, d.isToday && styles.weekLetterToday]}>{d.letter}</Text>
+              <View
+                style={[
+                  styles.weekDot,
+                  d.isFuture ? styles.weekDotFuture : d.cheated ? styles.weekDotCheat : styles.weekDotClean,
+                  d.isToday && styles.weekDotToday,
+                ]}
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {tagCounts.length > 0 && (
           <View style={styles.tagBreakdown}>
-            {Object.entries(tagCounts).map(([tag, count]) => {
-              const info = tag === 'untagged' ? { label: 'Other', color: COLORS.textMuted, icon: 'ellipse-outline' } : getTagInfo(tag);
+            {tagCounts.map(([key, count]) => {
+              const info = key === 'other' ? OTHER_TAG : getTagInfo(key);
               return (
-                <View key={tag} style={[styles.tagBreakdownChip, { backgroundColor: `${info.color}22` }]}>
+                <View key={key} style={[styles.breakdownChip, { backgroundColor: `${info.color}1f` }]}>
                   <Ionicons name={info.icon} size={11} color={info.color} />
-                  <Text style={[styles.tagBreakdownText, { color: info.color }]}>{info.label} {count}</Text>
+                  <Text style={[styles.breakdownText, { color: info.color }]}>
+                    {info.label} {count}
+                  </Text>
                 </View>
               );
             })}
@@ -224,219 +280,197 @@ export default function CheatScreen() {
         )}
       </View>
 
-      {/* Weekly view toggle */}
-      <View style={styles.viewToggleRow}>
-        <TouchableOpacity
-          style={[styles.viewToggleBtn, !weekView && styles.viewToggleBtnActive]}
-          onPress={() => setWeekView(false)}
-        >
-          <Ionicons name="calendar-outline" size={14} color={!weekView ? COLORS.primary : COLORS.textMuted} />
-          <Text style={[styles.viewToggleText, !weekView && styles.viewToggleTextActive]}>Calendar</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.viewToggleBtn, weekView && styles.viewToggleBtnActive]}
-          onPress={() => setWeekView(true)}
-        >
-          <Ionicons name="bar-chart-outline" size={14} color={weekView ? COLORS.primary : COLORS.textMuted} />
-          <Text style={[styles.viewToggleText, weekView && styles.viewToggleTextActive]}>This Week</Text>
-        </TouchableOpacity>
-      </View>
+      {/* ── Composer ──────────────────────────────────────────────────────── */}
+      <View style={styles.composer}>
+        <View style={styles.composerHeader}>
+          <Text style={styles.composerLabel}>Logging for</Text>
+          <View style={[styles.datePill, !loggingForToday && styles.datePillPast]}>
+            <Ionicons
+              name="calendar-outline"
+              size={12}
+              color={loggingForToday ? COLORS.textSecondary : COLORS.primary}
+            />
+            <Text style={[styles.datePillText, !loggingForToday && styles.datePillTextPast]}>
+              {loggingForToday ? 'Today' : formatDate(selectedDate)}
+            </Text>
+          </View>
+          {!loggingForToday && (
+            <TouchableOpacity onPress={() => selectDay(today)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.backToToday}>Back to today</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {weekView ? (
-        // Weekly patterns view
-        <View style={styles.weekCard}>
-          <Text style={styles.weekCardTitle}>Week at a Glance</Text>
-          {weekDays.map(({ dateStr, entry }) => {
-            const items = entry ? entry.items.map(normalizeItem) : [];
-            const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' });
-            const isToday = dateStr === today;
+        <View style={styles.inputRow}>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder="What did you have?"
+            placeholderTextColor={COLORS.textMuted}
+            value={text}
+            onChangeText={setText}
+            onSubmitEditing={handleLog}
+            returnKeyType="done"
+            blurOnSubmit={false}
+            accessibilityLabel="What did you have"
+          />
+          <TouchableOpacity
+            style={[styles.logBtn, !text.trim() && styles.logBtnDisabled]}
+            onPress={handleLog}
+            disabled={!text.trim()}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Log cheat"
+          >
+            <Ionicons name="add" size={18} color={COLORS.white} />
+            <Text style={styles.logBtnText}>Log</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.tagRow}>
+          {TAGS.map((t) => {
+            const active = tag === t.key;
             return (
               <TouchableOpacity
-                key={dateStr}
-                style={[styles.weekRow, isToday && styles.weekRowToday]}
-                onPress={() => { setWeekView(false); handleDayPress({ dateString: dateStr }); }}
-                activeOpacity={0.8}
+                key={t.key}
+                style={[
+                  styles.tagChip,
+                  { backgroundColor: `${t.color}1a`, borderColor: active ? t.color : 'transparent' },
+                ]}
+                onPress={() => handleTagPress(t)}
+                activeOpacity={0.75}
               >
-                <Text style={[styles.weekDayName, isToday && { color: COLORS.primary }]}>{dayName}</Text>
-                {items.length > 0 ? (
-                  <View style={styles.weekItemRow}>
-                    {items.slice(0, 3).map((item, i) => {
-                      const info = item.tag ? getTagInfo(item.tag) : null;
-                      return (
-                        <View key={i} style={[styles.weekItemChip, info && { backgroundColor: `${info.color}22` }]}>
-                          {info && <Ionicons name={info.icon} size={10} color={info.color} />}
-                          <Text style={[styles.weekItemText, info && { color: info.color }]} numberOfLines={1}>
-                            {item.text}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                    {items.length > 3 && (
-                      <Text style={styles.weekMoreText}>+{items.length - 3}</Text>
-                    )}
-                  </View>
-                ) : (
-                  <Text style={styles.weekEmptyDay}>Clean</Text>
-                )}
+                <Ionicons name={t.icon} size={13} color={t.color} />
+                <Text style={[styles.tagChipText, { color: t.color }]}>{t.label}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
-      ) : (
-        <View style={styles.calendarShell}>
-          <Calendar
-            onDayPress={handleDayPress}
-            markedDates={selected}
-            theme={{
-              ...CALENDAR_THEME,
-              dotColor: COLORS.danger,
-              selectedDotColor: COLORS.background,
-            }}
-            style={styles.calendar}
-          />
-        </View>
-      )}
 
-      <View
-        style={styles.detailCard}
-        onLayout={(event) => setDetailCardY(event.nativeEvent.layout.y)}
-      >
-        <View style={styles.detailHeader}>
-          <View style={styles.detailCopy}>
-            <Text style={styles.detailDate}>{formatDate(selectedDate)}</Text>
-            <Text style={styles.detailSubtitle}>
-              {selectedCheatDay
-                ? `${selectedCheatDay.items.length} cheat${selectedCheatDay.items.length !== 1 ? 's' : ''} logged`
-                : 'No cheats logged — clean day!'}
+        {justLogged && (
+          <View style={styles.loggedRow}>
+            <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
+            <Text style={styles.loggedText}>Logged “{justLogged}”</Text>
+          </View>
+        )}
+      </View>
+
+      {/* ── Calendar ──────────────────────────────────────────────────────── */}
+      <View style={styles.calendarShell}>
+        <Calendar
+          onDayPress={(day) => selectDay(day.dateString)}
+          markedDates={markedDates}
+          theme={{ ...CALENDAR_THEME, dotColor: COLORS.danger, selectedDotColor: COLORS.background }}
+          style={styles.calendar}
+        />
+      </View>
+
+      {/* ── Selected day ──────────────────────────────────────────────────── */}
+      <View style={styles.dayCard} onLayout={(e) => setDayCardY(e.nativeEvent.layout.y)}>
+        <View style={styles.dayHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.dayTitle}>{loggingForToday ? 'Today' : formatDate(selectedDate)}</Text>
+            <Text style={[styles.daySubtitle, !selectedDay && { color: COLORS.success }]}>
+              {selectedDay
+                ? `${selectedDay.items.length} cheat${selectedDay.items.length !== 1 ? 's' : ''} logged`
+                : selectedDate > today
+                ? 'Not yet'
+                : 'Clean day'}
             </Text>
           </View>
-          <TouchableOpacity style={styles.logBtn} onPress={() => setShowModal(true)} activeOpacity={0.88}>
-            <Ionicons name="add" size={16} color={COLORS.white} />
-            <Text style={styles.logBtnText}>Log Cheat</Text>
+          <TouchableOpacity style={styles.dayAddBtn} onPress={focusComposer} activeOpacity={0.8}>
+            <Ionicons name="add" size={14} color={COLORS.primary} />
+            <Text style={styles.dayAddText}>Add</Text>
           </TouchableOpacity>
         </View>
 
-        {selectedCheatDay && selectedCheatDay.items.length > 0 ? (
+        {selectedDay ? (
           <View style={styles.itemsList}>
-            {selectedCheatDay.items.map(normalizeItem).map((item, index) => {
+            {selectedDay.items.map((item, index) => {
               const info = item.tag ? getTagInfo(item.tag) : null;
+              const color = info ? info.color : COLORS.textSecondary;
               return (
-                <View key={index} style={[
-                  styles.itemChip,
-                  info && { backgroundColor: `${info.color}22`, borderColor: `${info.color}44` },
-                ]}>
-                  {info && <Ionicons name={info.icon} size={12} color={info.color} />}
-                  <Text style={[styles.itemText, info && { color: info.color }]}>{item.text}</Text>
+                <View
+                  key={`${item.text}-${index}`}
+                  style={[styles.itemChip, { backgroundColor: `${color}1f`, borderColor: `${color}55` }]}
+                >
+                  {info && <Ionicons name={info.icon} size={12} color={color} />}
+                  <Text style={[styles.itemText, { color }]}>{item.text}</Text>
                   <TouchableOpacity
                     onPress={() => confirmDeleteItem(index)}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${item.text}`}
                   >
-                    <Ionicons name="close-circle" size={16} color={info?.color || COLORS.danger} />
+                    <Ionicons name="close-circle" size={16} color={color} />
                   </TouchableOpacity>
                 </View>
               );
             })}
           </View>
         ) : (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="checkmark-circle-outline" size={22} color={COLORS.success} />
-            </View>
-            <Text style={styles.emptyText}>Clean day — nothing logged.</Text>
+          <View style={styles.cleanRow}>
+            <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.success} />
+            <Text style={styles.cleanText}>
+              {selectedDate > today ? 'This day has not happened yet.' : 'Nothing logged. Keep it that way.'}
+            </Text>
           </View>
         )}
       </View>
 
-      {cheatDays.length > 0 && (
-        <>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Recent Entries</Text>
-            <Text style={styles.sectionMeta}>Last 5 days</Text>
-          </View>
+      {/* ── History ───────────────────────────────────────────────────────── */}
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionTitle}>History</Text>
+        <Text style={styles.sectionMeta}>
+          {hasAnyHistory ? `${history.length} day${history.length !== 1 ? 's' : ''}` : ''}
+        </Text>
+      </View>
 
-          {cheatDays.slice(0, 5).map((entry) => {
-            const items = entry.items.map(normalizeItem);
-            const tagSet = [...new Set(items.map((i) => i.tag).filter(Boolean))];
-            return (
+      {!hasAnyHistory ? (
+        <View style={styles.emptyHistory}>
+          <Ionicons name="leaf-outline" size={22} color={COLORS.success} />
+          <Text style={styles.emptyHistoryText}>No cheats logged yet.</Text>
+          <Text style={styles.emptyHistorySub}>When one happens, write it down above. That is the whole habit.</Text>
+        </View>
+      ) : (
+        history.map((entry, i) => {
+          const prev = history[i - 1];
+          const newMonth = !prev || getMonthKey(prev.date) !== getMonthKey(entry.date);
+          const tagSet = [...new Set(entry.items.map((it) => it.tag).filter(Boolean))];
+          const isSelected = entry.date === selectedDate;
+          return (
+            <View key={entry.id || entry.date}>
+              {newMonth && <Text style={styles.monthDivider}>{monthLabel(entry.date)}</Text>}
               <TouchableOpacity
-                key={entry.id}
-                style={styles.historyCard}
-                onPress={() => focusEntry(entry)}
+                style={[styles.historyCard, isSelected && styles.historyCardSelected]}
+                onPress={() => jumpToDay(entry.date)}
                 activeOpacity={0.84}
               >
                 <View style={styles.historyHeader}>
-                  <Text style={styles.historyDate}>{formatDate(entry.date)}</Text>
-                  <View style={styles.historyTags}>
-                    {tagSet.map((tag) => {
-                      const info = getTagInfo(tag);
+                  <Text style={styles.historyDate}>
+                    {entry.date === today ? 'Today' : formatDate(entry.date)}
+                  </Text>
+                  <View style={styles.historyRight}>
+                    {tagSet.map((k) => {
+                      const info = getTagInfo(k);
                       return (
-                        <View key={tag} style={[styles.historyTagChip, { backgroundColor: `${info.color}22` }]}>
+                        <View key={k} style={[styles.historyTagDot, { backgroundColor: `${info.color}26` }]}>
                           <Ionicons name={info.icon} size={10} color={info.color} />
                         </View>
                       );
                     })}
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                    <Text style={styles.historyCount}>{entry.items.length}</Text>
+                    <Ionicons name="chevron-forward" size={14} color={COLORS.textMuted} />
                   </View>
                 </View>
-                <Text style={styles.historyItems}>{items.map((i) => i.text).join(', ')}</Text>
+                <Text style={styles.historyItems} numberOfLines={2}>
+                  {entry.items.map((it) => it.text).join(' · ')}
+                </Text>
               </TouchableOpacity>
-            );
-          })}
-        </>
-      )}
-
-      {/* Add item modal */}
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowModal(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalWrap}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
-        >
-          <Pressable style={styles.modalOverlay} onPress={() => setShowModal(false)} />
-          <View style={styles.modalSheet}>
-            <View style={styles.modalGrabber} />
-            <Text style={styles.modalTitle}>Log Cheat Meal</Text>
-            <Text style={styles.modalSubtitle}>{formatDate(selectedDate)}</Text>
-
-            {/* Treat selector */}
-            <View style={styles.tagSelector}>
-              {TAGS.map((tag) => (
-                <TouchableOpacity
-                  key={tag.key}
-                  style={[
-                    styles.tagOption,
-                    { backgroundColor: `${tag.color}22` },
-                    selectedTag === tag.key && { borderColor: tag.color, borderWidth: 1.5 },
-                  ]}
-                  onPress={() => handleTagPress(tag)}
-                >
-                  <Ionicons name={tag.icon} size={16} color={tag.color} />
-                  <Text style={[styles.tagOptionText, { color: tag.color }]}>{tag.label}</Text>
-                </TouchableOpacity>
-              ))}
             </View>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Cookie dough, chocolate cake, brownie..."
-              placeholderTextColor={COLORS.textMuted}
-              value={newItem}
-              onChangeText={setNewItem}
-              autoFocus
-              onSubmitEditing={handleAddItem}
-              returnKeyType="done"
-            />
-            <TouchableOpacity style={styles.modalAddBtn} onPress={handleAddItem} activeOpacity={0.9}>
-              <Text style={styles.modalAddBtnText}>Add Cheat</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          );
+        })
+      )}
     </ScrollView>
   );
 }
@@ -444,323 +478,234 @@ export default function CheatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: LAYOUT.screenPadding, paddingBottom: 120 },
-  heroCard: {
+
+  // Stats
+  statsCard: {
     backgroundColor: COLORS.surface,
     borderRadius: LAYOUT.cardRadius,
-    padding: 22,
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginBottom: 14,
+    padding: 16,
+    marginBottom: 12,
     ...SHADOWS.card,
   },
-  heroEyebrow: {
-    color: COLORS.danger,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+  statsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 14 },
+  statHero: { flex: 1 },
+  statEyebrow: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 10,
+    marginBottom: 2,
   },
-  heroTitle: {
-    color: COLORS.text,
-    fontSize: 26,
-    fontWeight: '800',
-    lineHeight: 32,
-    marginBottom: 8,
-  },
-  heroSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  heroStats: {
+  statHeroValue: { color: COLORS.success, fontSize: 36, fontWeight: '800', lineHeight: 40 },
+  statHeroValueZero: { color: COLORS.danger },
+  statHeroValueMuted: { color: COLORS.textMuted, fontSize: 36, fontWeight: '800', lineHeight: 40 },
+  statHeroUnit: { color: COLORS.textSecondary, fontSize: 14, fontWeight: '600' },
+  statSide: { alignItems: 'flex-end', minWidth: 56 },
+  statSideValue: { color: COLORS.text, fontSize: 20, fontWeight: '800', lineHeight: 24 },
+  statSideLabel: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', marginTop: 1 },
+
+  weekStrip: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
-    marginBottom: 14,
-  },
-  heroStat: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  heroStatValue: {
-    color: COLORS.text,
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  heroStatLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  tagBreakdown: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tagBreakdownChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: LAYOUT.pillRadius,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  tagBreakdownText: { fontSize: 12, fontWeight: '700' },
-  viewToggleRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-    backgroundColor: COLORS.surface,
-    borderRadius: LAYOUT.pillRadius,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  viewToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: LAYOUT.pillRadius,
-  },
-  viewToggleBtnActive: { backgroundColor: COLORS.primarySoft },
-  viewToggleText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '700' },
-  viewToggleTextActive: { color: COLORS.primary },
-  weekCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: LAYOUT.cardRadius,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 14,
-    gap: 8,
-    ...SHADOWS.soft,
-  },
-  weekCardTitle: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 6,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
-  weekRowToday: { backgroundColor: COLORS.primarySoft, borderRadius: 14, paddingHorizontal: 10, borderTopWidth: 0 },
-  weekDayName: { color: COLORS.textMuted, fontSize: 13, fontWeight: '700', width: 32 },
-  weekItemRow: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  weekItemChip: {
+  weekCell: { alignItems: 'center', gap: 6, flex: 1 },
+  weekLetter: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700' },
+  weekLetterToday: { color: COLORS.primary },
+  weekDot: { width: 14, height: 14, borderRadius: 7 },
+  weekDotClean: { backgroundColor: COLORS.success },
+  weekDotCheat: { backgroundColor: COLORS.danger },
+  weekDotFuture: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: COLORS.borderStrong },
+  weekDotToday: { borderWidth: 2, borderColor: COLORS.primary },
+
+  tagBreakdown: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
+  breakdownChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.dangerSoft,
-    borderRadius: LAYOUT.pillRadius,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    maxWidth: 100,
+    borderRadius: LAYOUT.pillRadius,
   },
-  weekItemText: { color: COLORS.danger, fontSize: 11, fontWeight: '600' },
-  weekMoreText: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700' },
-  weekEmptyDay: { color: COLORS.success, fontSize: 12, fontWeight: '600', opacity: 0.7 },
+  breakdownText: { fontSize: 11, fontWeight: '700' },
+
+  // Composer
+  composer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: LAYOUT.cardRadius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    marginBottom: 12,
+    ...SHADOWS.card,
+  },
+  composerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  composerLabel: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
+  datePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: LAYOUT.pillRadius,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  datePillPast: { backgroundColor: COLORS.primarySoft },
+  datePillText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700' },
+  datePillTextPast: { color: COLORS.primary },
+  backToToday: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
+
+  inputRow: { flexDirection: 'row', gap: 8 },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: COLORS.text,
+    fontSize: 16,
+  },
+  logBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: COLORS.danger,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  logBtnDisabled: { opacity: 0.4 },
+  logBtnText: { color: COLORS.white, fontSize: 14, fontWeight: '800' },
+
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: LAYOUT.pillRadius,
+    borderWidth: 1.5,
+  },
+  tagChipText: { fontSize: 12, fontWeight: '700' },
+
+  loggedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 },
+  loggedText: { color: COLORS.success, fontSize: 12, fontWeight: '600' },
+
+  // Calendar
   calendarShell: {
     backgroundColor: COLORS.surface,
     borderRadius: LAYOUT.cardRadius,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 10,
-    marginBottom: 14,
-    ...SHADOWS.soft,
+    padding: 6,
+    marginBottom: 12,
+    ...SHADOWS.card,
   },
-  calendar: {
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  detailCard: {
+  calendar: { borderRadius: LAYOUT.cardRadius },
+
+  // Selected day
+  dayCard: {
     backgroundColor: COLORS.surface,
     borderRadius: LAYOUT.cardRadius,
-    padding: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginBottom: 18,
-    ...SHADOWS.soft,
+    padding: 16,
+    marginBottom: 20,
+    ...SHADOWS.card,
   },
-  detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 16,
-  },
-  detailCopy: { flex: 1 },
-  detailDate: { color: COLORS.text, fontSize: 20, fontWeight: '800' },
-  detailSubtitle: { color: COLORS.textSecondary, fontSize: 13, marginTop: 4 },
-  logBtn: {
+  dayHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dayTitle: { color: COLORS.text, fontSize: 17, fontWeight: '800' },
+  daySubtitle: { color: COLORS.textSecondary, fontSize: 13, marginTop: 2 },
+  dayAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.danger,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: LAYOUT.pillRadius,
-    gap: 6,
-  },
-  logBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 13 },
-  itemsList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  itemChip: {
-    backgroundColor: COLORS.dangerSoft,
+    gap: 2,
+    backgroundColor: COLORS.primarySoft,
     borderRadius: LAYOUT.pillRadius,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(251, 113, 133, 0.25)',
+    paddingVertical: 7,
+  },
+  dayAddText: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
+  itemsList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  itemChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: LAYOUT.pillRadius,
+    borderWidth: 1,
   },
-  itemText: { color: COLORS.danger, fontSize: 13, fontWeight: '700' },
-  itemTag: { fontSize: 10, fontWeight: '700', opacity: 0.7 },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  emptyIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.successSoft,
-    marginBottom: 12,
-  },
-  emptyText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '600' },
+  itemText: { fontSize: 14, fontWeight: '600' },
+  cleanRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  cleanText: { color: COLORS.textSecondary, fontSize: 13 },
+
+  // History
   sectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     marginBottom: 10,
   },
   sectionTitle: {
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  sectionMeta: {
-    color: COLORS.textMuted,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  sectionMeta: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
+  monthDivider: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 6,
+    marginBottom: 8,
   },
   historyCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
-    ...SHADOWS.soft,
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
+    padding: 14,
     marginBottom: 8,
   },
-  historyDate: { color: COLORS.text, fontSize: 15, fontWeight: '800' },
-  historyTags: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  historyTagChip: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+  historyCardSelected: { borderColor: COLORS.primary },
+  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  historyDate: { color: COLORS.text, fontSize: 15, fontWeight: '700' },
+  historyRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  historyTagDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  historyItems: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 19 },
-  modalWrap: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.overlay,
-  },
-  modalSheet: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 28,
-    borderTopWidth: 1,
-    borderColor: COLORS.borderStrong,
-  },
-  modalGrabber: {
-    alignSelf: 'center',
-    width: 56,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: COLORS.borderStrong,
-    marginBottom: 16,
-  },
-  modalTitle: {
-    color: COLORS.text,
-    fontSize: 22,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 16,
-  },
-  tagSelector: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-    flexWrap: 'wrap',
-  },
-  tagOption: {
-    flexDirection: 'row',
+  historyCount: { color: COLORS.textMuted, fontSize: 12, fontWeight: '700', marginLeft: 2 },
+  historyItems: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 6 },
+
+  emptyHistory: {
     alignItems: 'center',
     gap: 6,
-    borderRadius: LAYOUT.pillRadius,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  tagOptionText: { fontSize: 13, fontWeight: '700' },
-  modalInput: {
-    backgroundColor: COLORS.backgroundSoft,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    color: COLORS.text,
-    fontSize: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: LAYOUT.cardRadius,
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginBottom: 14,
   },
-  modalAddBtn: {
-    backgroundColor: COLORS.danger,
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  modalAddBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
+  emptyHistoryText: { color: COLORS.text, fontSize: 15, fontWeight: '700' },
+  emptyHistorySub: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center', lineHeight: 18 },
 });

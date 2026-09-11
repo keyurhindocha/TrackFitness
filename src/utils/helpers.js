@@ -171,3 +171,22 @@ export const isSetPR = (set, stats) => {
   if (weight > stats.bestWeight) return true;
   return weight === stats.bestWeight && reps > stats.bestRepsAtBestWeight;
 };
+
+// Clean-day streaks from a list of dates that had a cheat logged.
+// `current` counts the clean days since the most recent cheat, treating today
+// as clean until something is logged; `best` is the longest clean run between
+// any two cheats, or the current run if that is longer. Null when nothing has
+// ever been logged, since there is no history to measure a streak against.
+export const getCleanStreaks = (cheatDates) => {
+  const dates = [...new Set(cheatDates)].sort();
+  if (dates.length === 0) return { current: null, best: null };
+
+  const current = Math.max(0, daysAgo(dates[dates.length - 1]));
+
+  let best = current;
+  for (let i = 1; i < dates.length; i++) {
+    const gap = daysAgo(dates[i - 1]) - daysAgo(dates[i]) - 1;
+    if (gap > best) best = gap;
+  }
+  return { current, best };
+};
