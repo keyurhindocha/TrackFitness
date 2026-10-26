@@ -13,14 +13,19 @@ const { execFileSync } = require('child_process');
 const run = (cmd, args) =>
   execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] }).toString();
 
-const available = (cmd) => {
-  try {
-    execFileSync('command', ['-v', cmd], { stdio: 'ignore', shell: '/bin/sh' });
-    return true;
-  } catch {
-    return false;
-  }
-};
+// Resolve on PATH ourselves rather than shelling out to `command -v`. Node 22
+// deprecates passing args alongside `shell: true`, and there is nothing a
+// shell is needed for here.
+const available = (cmd) =>
+  (process.env.PATH || '').split(path.delimiter).some((dir) => {
+    if (!dir) return false;
+    try {
+      fs.accessSync(path.join(dir, cmd), fs.constants.X_OK);
+      return fs.statSync(path.join(dir, cmd)).isFile();
+    } catch {
+      return false;
+    }
+  });
 
 const BACKENDS = [
   {
