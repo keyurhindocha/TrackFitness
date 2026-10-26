@@ -28,14 +28,14 @@ import {
 import { COLORS, LAYOUT, SHADOWS, CALENDAR_THEME } from '../utils/theme';
 import { useUnit } from '../context/UnitContext';
 import { showAlert } from '../components/AlertHost';
+import ExerciseInfoButton from '../components/ExerciseInfoButton';
+import { GUIDE_EXERCISE_NAMES } from '../data/exerciseGuides';
 
 const KEYBOARD_ACCESSORY_ID = 'workout-inputs';
 
-const BASE_EXERCISES = [
-  'Barbell Row', 'Bench Press', 'Bicep Curls', 'Deadlift',
-  'Dips', 'Leg Press', 'Overhead Press', 'Pull-ups',
-  'Squat', 'Tricep Pushdown',
-];
+// Every movement with a form guide, so the suggestion chips and the (i)
+// button cover the same ground.
+const BASE_EXERCISES = [...GUIDE_EXERCISE_NAMES].sort((a, b) => a.localeCompare(b));
 
 export default function LogWorkoutScreen({ navigation, route }) {
   const { unit } = useUnit();
@@ -228,6 +228,7 @@ export default function LogWorkoutScreen({ navigation, route }) {
               <View style={styles.exerciseNameRow}>
                 <View style={styles.exerciseAccent} />
                 <Text style={styles.exerciseName}>{exercise.name}</Text>
+                <ExerciseInfoButton name={exercise.name} size={17} />
                 {hasPR && (
                   <View style={styles.prChip}>
                     <Ionicons name="trophy" size={10} color={COLORS.highlight} />

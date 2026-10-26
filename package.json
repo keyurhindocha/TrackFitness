@@ -8,6 +8,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:web": "expo export --platform web",
+    "build:art": "node scripts/build-exercise-art.js",
+    "import:art": "node scripts/import-exercise-art.js",
     "serve:web": "npx serve dist",
     "test": "jest"
   },

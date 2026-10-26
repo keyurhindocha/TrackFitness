@@ -28,6 +28,7 @@ No sign-up. No network calls. No analytics. Just the barbell and the numbers.
 - [One codebase, three targets](#one-codebase-three-targets)
 - [Features](#features)
 - [The app, screen by screen](#the-app-screen-by-screen)
+- [Form guides](#form-guides)
 - [Quick start](#quick-start)
 - [Shipping the website](#shipping-the-website)
 - [Installing on a phone](#installing-on-a-phone)
@@ -85,6 +86,9 @@ at build time.
 - Edit or delete any past session, including its date
 - Autocomplete that merges a built-in exercise list with everything you have logged
 - History grouped by date, expandable session by session
+- An **(i)** beside every known exercise name, opening a form guide: a
+  start-of-rep / finish-of-rep diagram, the muscles it trains, how to set up,
+  how to run the rep, and what usually goes wrong
 
 **Progress**
 
@@ -152,6 +156,89 @@ macros, no lecture.
 Counts of everything stored, the unit selector, and the export/import pair. The
 unit switch is not cosmetic: flipping to `kg` rewrites every stored weight
 through a conversion pass, so your history stays internally consistent.
+
+---
+
+## Form guides
+
+Every exercise the app knows about carries a guide: a two-panel diagram
+(start of rep / finish of rep), the muscles it trains, setup and execution
+steps, and the mistakes people actually make. It opens from the **(i)** next
+to the exercise name on Workouts, Progress and Log Workout, and sits inline at
+the top of a Progress Detail page.
+
+### Where the images live
+
+`assets/exercises/` holds one file per exercise, named after its slug:
+
+```text
+assets/exercises/
+├── lat-pulldown.jpg     # a real illustration — always wins
+├── bench-press.svg      # the generated schematic — the fallback
+└── …
+```
+
+Two sources, in that order of preference. `ExerciseArt` looks for
+`<slug>.jpg|png|webp` first and only falls back to `<slug>.svg`.
+
+### Adding your own illustrations
+
+Name each image after the exercise — its name, slug or any alias works, and
+case, spaces and dashes are ignored — then:
+
+```bash
+npm run import:art -- ~/Downloads/exercise-images   # resize, re-encode, file
+npm run build:art                                   # register them
+```
+
+The importer reports anything it could not match so you can rename and re-run.
+To do it by hand instead, save the image as
+`assets/exercises/<slug>.jpg` and run `npm run build:art`.
+
+### Changing the generated schematics
+
+The fallback diagrams are drawn from pose data, not hand-edited SVG. Each
+exercise is a pair of poses — joint angles plus a little scenery — in
+`scripts/exercise-art.js`:
+
+```js
+start: {
+  pose: { hip: [264, 290], torso: -90, upperArm: 88, foreArm: 92, … },
+  gear: (k) => floor() + s.barbellAt(k),
+  cues: ['Arms hanging straight, elbows at your sides', …],
+}
+```
+
+A pose may `anchor` a joint to a fixed point — hands on a pull-up bar, feet on
+the floor — and the figure slides to suit, which is what keeps the two panels
+of a diagram consistent with each other and with the apparatus. Equipment
+helpers ending in `At` (`barbellAt`, `dumbbellAt`, `handleAt`) take the
+skeleton and put the weight where the hand actually is.
+
+Run `npm run build:art` after editing. It rewrites both
+`assets/exercises/*.svg` and `src/data/exerciseArt.js`, and deletes SVGs whose
+definition has gone away.
+
+### Adding a new exercise
+
+1. Add a guide to `src/data/exerciseGuides.js` — give it a `slug`, and list
+   every name you might type for it under `aliases`.
+2. Add a matching entry to `scripts/exercise-art.js` using the same slug, or
+   drop in an illustration named after it.
+3. `npm run build:art && npm test`.
+
+The test suite checks that every guide has a diagram, that no diagram is
+orphaned, and that no two guides claim the same name.
+
+### Name matching
+
+Logs are typed by hand, so lookup is forgiving. `findExerciseGuide()` tries the
+exact name, then the de-pluralised form, then the name with equipment words
+(`machine`, `cable`, `dumbbell`, `assisted`, `seated`, …) stripped out. A
+stripped name two guides could both claim — "row" — is left unmatched rather
+than guessed at. That is how `Low Row`, `Dual pull row` and `Seated cable row`
+all reach the same guide while `Leg extension` and `Seated leg curl` stay
+apart.
 
 ---
 
@@ -265,7 +352,15 @@ a paid Developer Program membership extends that to a year.
 │   └── manifest.webmanifest
 ├── src/
 │   ├── components/
-│   │   └── AlertHost.js        # cross-platform confirmation dialogs
+│   │   ├── AlertHost.js        # cross-platform confirmation dialogs
+│   │   ├── ExerciseArt.js      # the diagram: illustration, else schematic
+│   │   ├── ExerciseGuideCard.js# inline diagram on a single-exercise screen
+│   │   ├── ExerciseGuideModal.js
+│   │   └── ExerciseInfoButton.js # the (i) beside an exercise name
+│   ├── data/
+│   │   ├── exerciseGuides.js   # muscles, cues, mistakes + name matching
+│   │   ├── exerciseArt.js      # GENERATED — inlined schematic SVGs
+│   │   └── exercisePhotos.js   # GENERATED — require() per illustration
 │   ├── context/
 │   │   └── UnitContext.js      # lbs/kg preference + conversion
 │   ├── navigation/
@@ -278,6 +373,12 @@ a paid Developer Program membership extends that to a year.
 │       ├── backup.web.js       # web: blob download + file input
 │       ├── helpers.js          # dates, ids, formatting
 │       └── theme.js            # colours, layout, shadows
+├── assets/exercises/           # one diagram per exercise (the images folder)
+├── scripts/
+│   ├── build-exercise-art.js   # regenerates the two GENERATED files above
+│   ├── import-exercise-art.js  # drops real illustrations into assets/exercises
+│   ├── exercise-art.js         # pose + scenery definitions
+│   └── lib/                    # figure, equipment and page drawing
 └── .github/workflows/
     └── deploy-web.yml          # build and publish to GitHub Pages
 ```
