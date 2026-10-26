@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "main": "expo/AppEntry",
   "scripts": {
+    "prestart": "npm run build:art",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "preweb": "npm run build:art",
     "web": "expo start --web",
+    "prebuild:web": "npm run build:art",
     "build:web": "expo export --platform web",
     "build:art": "node scripts/build-exercise-art.js",
     "import:art": "node scripts/import-exercise-art.js",
