@@ -8,6 +8,10 @@
 // resized to fit 1400px, re-encoded as JPEG and written to
 // assets/exercises/<slug>.jpg, replacing the generated schematic for that
 // movement. Anything that cannot be matched is listed and left alone.
+//
+// Downloads usually arrive with a hash stuck on the end
+// ("barbell_back_squat_8bd40f37.jpg"), so a filename that *starts* with an
+// exercise name and ends in nothing but a hash counts as a match.
 
 const fs = require('fs');
 const path = require('path');
@@ -44,13 +48,34 @@ for (const block of guideSource.split(/\n  \{\n/).slice(1)) {
   });
 }
 
+// Longest name first, so "barbell bench press" is preferred over "bench".
+const labelsByLength = [...lookup.keys()].sort((a, b) => b.length - a.length);
+const isHash = (rest) => rest.length >= 6 && /^[0-9a-f]+$/.test(rest);
+
+const resolve = (base) => {
+  const k = key(base);
+  if (lookup.has(k)) return lookup.get(k);
+  // Fall back to the longest exercise name this filename starts with, as long
+  // as everything after it is just a hash. A tie between two different
+  // exercises is left unmatched rather than guessed at.
+  const candidates = labelsByLength.filter(
+    (label) => k.startsWith(label) && isHash(k.slice(label.length))
+  );
+  if (!candidates.length) return undefined;
+  const best = candidates[0].length;
+  const slugs = new Set(
+    candidates.filter((l) => l.length === best).map((l) => lookup.get(l))
+  );
+  return slugs.size === 1 ? [...slugs][0] : undefined;
+};
+
 const matched = [];
 const skipped = [];
 
 for (const file of fs.readdirSync(inputDir).sort()) {
   const ext = path.extname(file).toLowerCase();
   if (!SRC_EXT.includes(ext)) continue;
-  const slug = lookup.get(key(path.basename(file, ext)));
+  const slug = resolve(path.basename(file, ext));
   if (!slug) {
     skipped.push(file);
     continue;

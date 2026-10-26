@@ -184,7 +184,8 @@ Two sources, in that order of preference. `ExerciseArt` looks for
 ### Adding your own illustrations
 
 Name each image after the exercise — its name, slug or any alias works, and
-case, spaces and dashes are ignored — then:
+case, spaces and dashes are ignored. A download's trailing hash is fine too:
+`barbell_back_squat_8bd40f37.jpg` matches. Then:
 
 ```bash
 npm run import:art -- ~/Downloads/exercise-images   # resize, re-encode, file
