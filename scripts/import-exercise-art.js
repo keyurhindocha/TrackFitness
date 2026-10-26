@@ -15,7 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { fitToWidth, encoder } = require('./lib/encode');
 
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'assets', 'exercises');
@@ -71,6 +71,7 @@ const resolve = (base) => {
 
 const matched = [];
 const skipped = [];
+const failed = [];
 
 for (const file of fs.readdirSync(inputDir).sort()) {
   const ext = path.extname(file).toLowerCase();
@@ -80,29 +81,36 @@ for (const file of fs.readdirSync(inputDir).sort()) {
     skipped.push(file);
     continue;
   }
-  const dest = path.join(OUT, `${slug}.jpg`);
-  execFileSync('python3', [
-    '-I', '-c',
-    'import sys\n' +
-      'from PIL import Image\n' +
-      'src, dest, cap = sys.argv[1], sys.argv[2], int(sys.argv[3])\n' +
-      'im = Image.open(src).convert("RGB")\n' +
-      'w, h = im.size\n' +
-      'if w > cap: im = im.resize((cap, round(h * cap / w)), Image.LANCZOS)\n' +
-      'im.save(dest, quality=86, optimize=True, progressive=True)\n',
-    path.join(inputDir, file), dest, String(MAX_WIDTH),
-  ]);
-  // Drop a stale copy under a different extension for the same exercise.
-  ['.png', '.jpeg', '.webp'].forEach((e) => {
+  // One bad file should not abandon the rest of the folder.
+  let written;
+  try {
+    written = fitToWidth(path.join(inputDir, file), path.join(OUT, `${slug}.jpg`), MAX_WIDTH);
+  } catch (err) {
+    failed.push(`${file}: ${err.message.split('\n')[0]}`);
+    continue;
+  }
+  // Drop a stale copy of the same exercise under a different extension.
+  ['.jpg', '.png', '.jpeg', '.webp'].forEach((e) => {
     const old = path.join(OUT, slug + e);
-    if (fs.existsSync(old)) fs.unlinkSync(old);
+    if (old !== written.path && fs.existsSync(old)) fs.unlinkSync(old);
   });
-  matched.push(`${file} → ${slug}.jpg`);
+  matched.push(`${file} → ${path.basename(written.path)}`);
 }
 
 matched.forEach((m) => console.log(`  ${m}`));
+
+if (!encoder() && matched.length) {
+  console.log(
+    `\nno image tool found (sips, magick, convert, ffmpeg, python3+Pillow) —\n` +
+      `copied the originals through at full size instead.`
+  );
+}
 if (skipped.length) {
   console.log(`\nno exercise matched these — rename them after the exercise:`);
   skipped.forEach((f) => console.log(`  ${f}`));
+}
+if (failed.length) {
+  console.log(`\ncould not read these:`);
+  failed.forEach((f) => console.log(`  ${f}`));
 }
 console.log(`\n${matched.length} imported. Run \`npm run build:art\` to register them.`);

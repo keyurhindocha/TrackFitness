@@ -193,8 +193,13 @@ npm run build:art                                   # register them
 ```
 
 The importer reports anything it could not match so you can rename and re-run.
-To do it by hand instead, save the image as
-`assets/exercises/<slug>.jpg` and run `npm run build:art`.
+It shrinks images to fit using whatever the machine already has — `sips` on
+macOS, ImageMagick or ffmpeg elsewhere — and adds no dependency for it; with
+none of them installed it copies the originals through at full size.
+
+To do it by hand instead, save the image as `assets/exercises/<slug>.jpg` (or
+`.png` / `.webp`) and run `npm run build:art`. Uploading it through the GitHub
+web UI works just as well: the deploy workflow regenerates the registry.
 
 ### Changing the generated schematics
 
