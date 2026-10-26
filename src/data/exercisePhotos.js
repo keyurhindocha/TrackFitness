@@ -17,7 +17,6 @@ export const EXERCISE_PHOTOS = {
   'hammer-curl': require('../../assets/exercises/hammer-curl.jpg'),
   'hanging-leg-raise': require('../../assets/exercises/hanging-leg-raise.jpg'),
   'hip-thrust': require('../../assets/exercises/hip-thrust.jpg'),
-  'incline-bench-press': require('../../assets/exercises/incline-bench-press.jpg'),
   'lat-pulldown': require('../../assets/exercises/lat-pulldown.jpg'),
   'lateral-raise': require('../../assets/exercises/lateral-raise.jpg'),
   'leg-extension': require('../../assets/exercises/leg-extension.jpg'),
