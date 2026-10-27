@@ -15,6 +15,7 @@ import { getWorkouts, deleteWorkout } from '../storage/storage';
 import { formatDate, formatSet } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 import { showAlert } from '../components/AlertHost';
+import ExerciseInfoButton from '../components/ExerciseInfoButton';
 import { useUnit } from '../context/UnitContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -147,7 +148,10 @@ export default function WorkoutsScreen({ navigation }) {
                 <View key={i} style={styles.exerciseRow}>
                   <View style={styles.exerciseDot} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.exerciseName}>{ex.name}</Text>
+                    <View style={styles.exerciseNameRow}>
+                      <Text style={styles.exerciseName}>{ex.name}</Text>
+                      <ExerciseInfoButton name={ex.name} size={15} />
+                    </View>
                     <Text style={styles.setsText}>
                       {ex.sets.map((s) => formatSet(s, unit)).join('  ·  ')}
                     </Text>
@@ -318,6 +322,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     opacity: 0.7,
   },
+  exerciseNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   exerciseName: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   setsText: { color: COLORS.textSecondary, fontSize: 13, marginTop: 2, lineHeight: 18 },
 

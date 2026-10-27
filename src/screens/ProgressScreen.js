@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts } from '../storage/storage';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 import { useUnit } from '../context/UnitContext';
+import ExerciseInfoButton from '../components/ExerciseInfoButton';
 
 function Sparkline({ data, width = 80, height = 36 }) {
   if (data.length < 2) return null;
@@ -87,7 +88,10 @@ export default function ProgressScreen({ navigation }) {
         activeOpacity={0.75}
       >
         <View style={styles.cardLeft}>
-          <Text style={styles.exerciseName}>{item.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.exerciseName}>{item.name}</Text>
+            <ExerciseInfoButton name={item.name} size={16} />
+          </View>
           <View style={styles.statsRow}>
             <View style={styles.statPill}>
               <Ionicons name="repeat-outline" size={11} color={COLORS.textMuted} />
@@ -169,6 +173,7 @@ const styles = StyleSheet.create({
   cardLeft: { gap: 6, flex: 1 },
   cardRight: { alignItems: 'center', gap: 4, marginLeft: 12 },
 
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   exerciseName: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
 
   statsRow: { flexDirection: 'row', gap: 6 },

@@ -13,6 +13,7 @@ import { getWorkouts } from '../storage/storage';
 import { formatDateShort, formatDate } from '../utils/helpers';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
 import { useUnit } from '../context/UnitContext';
+import ExerciseGuideCard from '../components/ExerciseGuideCard';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -49,6 +50,9 @@ export default function ProgressDetailScreen({ route }) {
         </View>
         <Text style={styles.emptyTitle}>No data yet</Text>
         <Text style={styles.emptySubText}>Log {exerciseName} to see your progress</Text>
+        <View style={styles.emptyGuide}>
+          <ExerciseGuideCard name={exerciseName} width={SCREEN_WIDTH - 32 - 24} />
+        </View>
       </View>
     );
   }
@@ -72,6 +76,8 @@ export default function ProgressDetailScreen({ route }) {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+      <ExerciseGuideCard name={exerciseName} width={SCREEN_WIDTH - 32 - 24} />
+
       {/* Stat cards */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -186,6 +192,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700', marginBottom: 6 },
   emptySubText: { color: COLORS.textMuted, fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
+  emptyGuide: { marginTop: 24, paddingHorizontal: LAYOUT.screenPadding, alignSelf: 'stretch' },
 
   statsRow: {
     flexDirection: 'row',

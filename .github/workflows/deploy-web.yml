@@ -30,6 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Picks up any illustration added to assets/exercises/ and rewrites the
+      # generated registries, so adding an image is the only manual step.
+      - name: Regenerate exercise diagrams
+        run: npm run build:art
+
       - name: Run tests
         run: npm test
 
