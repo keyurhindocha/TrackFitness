@@ -133,6 +133,7 @@
   // ---- Support notice --------------------------------------------------
   const ua = navigator.userAgent;
   const isIOS = /iPhone|iPad|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
+  const isMac = !isIOS && /Macintosh|Mac OS X/.test(ua);
   const sup = $('support');
   function notice(html) { sup.innerHTML = html; sup.hidden = false; }
 
@@ -344,6 +345,7 @@
       status('Scanning… tap any device to track it.');
       requestWakeLock();
       renderList();
+      startWatchdog();
     } catch (err) {
       scan = null;
       status(friendlyError(err));
@@ -373,7 +375,28 @@
     }
   });
 
+  // If nothing at all arrives, the OS is almost certainly blocking the scan.
+  let watchdog = null;
+  function startWatchdog() {
+    clearTimeout(watchdog);
+    const seen = devices.size;
+    watchdog = setTimeout(() => {
+      if (devices.size > seen || !scan) return;
+      const fixes = isMac
+        ? '<b>No devices received after 8 seconds.</b> On a Mac:<ol>' +
+          '<li>Open <b>System Settings → Privacy &amp; Security → Bluetooth</b> and switch <b>Google Chrome</b> on. Then quit Chrome completely (⌘Q) and reopen it.</li>' +
+          '<li>Make sure Bluetooth is on in the menu bar.</li>' +
+          '<li>Chrome on macOS has limited support for scanning everything. If it’s still empty, tap <b>Pick one device</b>: if Chrome’s list shows devices there, choose your Fitbit to track just that one.</li>' +
+          '<li>Easiest alternative: install the free <b>LightBlue</b> app (Mac App Store or iPhone App Store). It lists nearby devices with signal strength, and a phone is far easier to carry room to room.</li></ol>'
+        : '<b>No devices received after 8 seconds.</b> On Android: turn <b>Location</b> on, and in Settings → Apps → Chrome → Permissions allow <b>Nearby devices</b> and <b>Location</b>. Then reload this page.';
+      notice(fixes);
+      sup.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      status('Nothing received yet — see the steps above.');
+    }, 8000);
+  }
+
   function stopAll() {
+    clearTimeout(watchdog);
     if (scan) { try { scan.stop(); } catch (_) {} bt.removeEventListener('advertisementreceived', onAdvert); scan = null; }
     if (pickedDevice) {
       try { pickedAbort && pickedAbort.abort(); } catch (_) {}
