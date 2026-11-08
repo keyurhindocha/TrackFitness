@@ -96,9 +96,17 @@ export default function WorkoutsScreen({ navigation }) {
         <View style={styles.cardInner}>
           <View style={styles.cardHeader}>
             <View style={styles.cardHeaderLeft}>
-              <Text style={styles.workoutTitle} numberOfLines={2}>
-                {exerciseTitle(item.exercises)}
-              </Text>
+              <View style={styles.titleRow}>
+                <Text style={styles.workoutTitle} numberOfLines={2}>
+                  {exerciseTitle(item.exercises)}
+                </Text>
+                {/* The title lists every exercise in the session, so a single
+                    (i) only says what it points at when there is one of them.
+                    A multi-exercise card carries an (i) per row once expanded. */}
+                {item.exercises.length === 1 && (
+                  <ExerciseInfoButton name={item.exercises[0].name} size={15} />
+                )}
+              </View>
               <View style={styles.pillRow}>
                 <View style={styles.pill}>
                   <Ionicons name="layers-outline" size={11} color={COLORS.textMuted} />
@@ -255,11 +263,14 @@ const styles = StyleSheet.create({
   cardHeaderLeft: { flex: 1, gap: 6 },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 8 },
 
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   workoutTitle: {
     color: COLORS.text,
     fontSize: 15,
     fontWeight: '700',
     lineHeight: 20,
+    // Shrink rather than push the (i) out of the card on a long title.
+    flexShrink: 1,
   },
 
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
