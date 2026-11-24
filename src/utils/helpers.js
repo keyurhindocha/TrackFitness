@@ -190,3 +190,38 @@ export const getCleanStreaks = (cheatDates) => {
   }
   return { current, best };
 };
+
+// One row per exercise for the Progress screen, most-trained first.
+// `weights` holds the heaviest set of each session, oldest first, skipping
+// sessions with no weight, so it can feed the sparkline and the "vs last" trend.
+export const getProgressSummaries = (workouts) => {
+  const map = {};
+  const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
+  sorted.forEach((w) => {
+    w.exercises.forEach((ex) => {
+      if (!map[ex.name]) map[ex.name] = { sessions: 0, maxWeight: 0, weights: [] };
+      map[ex.name].sessions += 1;
+      const best =
+        ex.sets.length > 0
+          ? Math.max(...ex.sets.map((s) => parseFloat(s.weight) || 0))
+          : 0;
+      if (best > map[ex.name].maxWeight) map[ex.name].maxWeight = best;
+      if (best > 0) map[ex.name].weights.push(best);
+    });
+  });
+  return Object.entries(map)
+    .map(([name, stats]) => ({ name, ...stats }))
+    .sort((a, b) => b.sessions - a.sessions);
+};
+
+// Change between the last two weighted sessions; 0 with fewer than two.
+export const getWeightTrend = (weights) =>
+  weights.length > 1 ? weights[weights.length - 1] - weights[weights.length - 2] : 0;
+
+// Case-insensitive substring match on the exercise name. A blank query
+// returns the list unchanged.
+export const filterByExerciseName = (items, query) => {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return items;
+  return items.filter((item) => item.name.toLowerCase().includes(q));
+};

@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getWorkouts } from '../storage/storage';
 import { COLORS, LAYOUT, SHADOWS } from '../utils/theme';
+import { getProgressSummaries, getWeightTrend, filterByExerciseName } from '../utils/helpers';
 import { useUnit } from '../context/UnitContext';
 import ExerciseInfoButton from '../components/ExerciseInfoButton';
 
@@ -51,41 +52,16 @@ export default function ProgressScreen({ navigation }) {
   const [exercises, setExercises] = useState([]);
   const [query, setQuery] = useState('');
 
-  const trimmedQuery = query.trim().toLowerCase();
-  const filteredExercises = trimmedQuery
-    ? exercises.filter((ex) => ex.name.toLowerCase().includes(trimmedQuery))
-    : exercises;
+  const filteredExercises = filterByExerciseName(exercises, query);
 
   useFocusEffect(
     useCallback(() => {
-      getWorkouts().then((workouts) => {
-        const map = {};
-        const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
-        sorted.forEach((w) => {
-          w.exercises.forEach((ex) => {
-            if (!map[ex.name]) map[ex.name] = { sessions: 0, maxWeight: 0, weights: [] };
-            map[ex.name].sessions += 1;
-            const best =
-              ex.sets.length > 0
-                ? Math.max(...ex.sets.map((s) => parseFloat(s.weight) || 0))
-                : 0;
-            if (best > map[ex.name].maxWeight) map[ex.name].maxWeight = best;
-            if (best > 0) map[ex.name].weights.push(best);
-          });
-        });
-        const list = Object.entries(map)
-          .map(([name, stats]) => ({ name, ...stats }))
-          .sort((a, b) => b.sessions - a.sessions);
-        setExercises(list);
-      });
+      getWorkouts().then((workouts) => setExercises(getProgressSummaries(workouts)));
     }, [])
   );
 
   const renderItem = ({ item }) => {
-    const trend =
-      item.weights.length > 1
-        ? item.weights[item.weights.length - 1] - item.weights[item.weights.length - 2]
-        : 0;
+    const trend = getWeightTrend(item.weights);
     const trendUp = trend > 0;
     const trendDown = trend < 0;
 
