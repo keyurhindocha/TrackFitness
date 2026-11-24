@@ -225,6 +225,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 15,
     paddingVertical: 0,
+    outlineStyle: 'none', // web only: hide the browser focus ring
   },
 
   card: {
