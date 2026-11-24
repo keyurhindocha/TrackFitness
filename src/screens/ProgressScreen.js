@@ -5,6 +5,8 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  TextInput,
+  Keyboard,
 } from 'react-native';
 import Svg, { Polyline, Circle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
@@ -47,6 +49,12 @@ function Sparkline({ data, width = 80, height = 36 }) {
 export default function ProgressScreen({ navigation }) {
   const { unit } = useUnit();
   const [exercises, setExercises] = useState([]);
+  const [query, setQuery] = useState('');
+
+  const trimmedQuery = query.trim().toLowerCase();
+  const filteredExercises = trimmedQuery
+    ? exercises.filter((ex) => ex.name.toLowerCase().includes(trimmedQuery))
+    : exercises;
 
   useFocusEffect(
     useCallback(() => {
@@ -134,13 +142,50 @@ export default function ProgressScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {exercises.length > 0 && (
+        <View style={styles.searchWrap}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={16} color={COLORS.textSecondary} />
+            <TextInput
+              style={styles.searchInput}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search exercises"
+              placeholderTextColor={COLORS.textSecondary}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              clearButtonMode="never"
+            />
+            {query.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setQuery('')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Clear search"
+              >
+                <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
       <FlatList
-        data={exercises}
+        data={filteredExercises}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onScrollBeginDrag={Keyboard.dismiss}
         keyExtractor={(item) => item.name}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
+          exercises.length > 0 ? (
+            <View style={styles.empty}>
+              <Ionicons name="search-outline" size={32} color={COLORS.textMuted} />
+              <Text style={styles.emptyText}>No matches</Text>
+              <Text style={styles.emptySubText}>No exercise matches "{query.trim()}"</Text>
+            </View>
+          ) : (
           <View style={styles.empty}>
             <View style={styles.emptyIconWrap}>
               <Ionicons name="trending-up-outline" size={36} color={COLORS.textMuted} />
@@ -148,6 +193,7 @@ export default function ProgressScreen({ navigation }) {
             <Text style={styles.emptyText}>No data yet</Text>
             <Text style={styles.emptySubText}>Log workouts to see your progress here</Text>
           </View>
+          )
         }
       />
     </View>
@@ -156,7 +202,30 @@ export default function ProgressScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  list: { padding: LAYOUT.screenPadding, paddingBottom: 20 },
+  list: { padding: LAYOUT.screenPadding, paddingTop: 4, paddingBottom: 20 },
+
+  searchWrap: {
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: LAYOUT.screenPadding,
+    paddingBottom: 8,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 12,
+    height: 42,
+  },
+  searchInput: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 15,
+    paddingVertical: 0,
+  },
 
   card: {
     backgroundColor: COLORS.surface,
