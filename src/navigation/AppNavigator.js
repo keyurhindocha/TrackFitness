@@ -116,7 +116,9 @@ export default function AppNavigator() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
-          marginBottom: Platform.OS === 'ios' ? 0 : isWeb ? 4 : 6,
+          // No web margin: React Navigation 7 pads the tab button, and the extra
+          // 4px squeezed the label and clipped its descenders.
+          marginBottom: Platform.OS === 'android' ? 6 : 0,
         },
         tabBarIcon: ({ color, size }) => (
           <Ionicons name={TAB_ICONS[route.name]} size={24} color={color} />
