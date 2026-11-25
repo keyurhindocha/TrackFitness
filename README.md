@@ -250,7 +250,7 @@ apart.
 
 ## Quick start
 
-**Prerequisites** — [Node.js](https://nodejs.org/) 20 or newer, and npm.
+**Prerequisites** — [Node.js](https://nodejs.org/) 22.13 or newer, and npm.
 
 ```bash
 git clone https://github.com/keyurhindocha/TrackFitness.git
@@ -485,9 +485,9 @@ every so often on principle.
 
 | | |
 | --- | --- |
-| **Framework** | Expo SDK 54, React Native 0.81, React 19.1 |
+| **Framework** | Expo SDK 58, React Native 0.88, React 19.3 |
 | **Web** | `react-native-web` 0.21, Metro, static export |
-| **Navigation** | React Navigation 6 — bottom tabs + native stack |
+| **Navigation** | React Navigation 7 — bottom tabs + native stack |
 | **Storage** | `@react-native-async-storage/async-storage` |
 | **Charts** | `react-native-chart-kit`, `react-native-svg` |
 | **Calendar** | `react-native-calendars` |
