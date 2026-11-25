@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import ProgressScreen from '../ProgressScreen';
 import { getWorkouts } from '../../storage/storage';
@@ -85,5 +86,11 @@ describe('ProgressScreen', () => {
     fireEvent.changeText(await screen.findByPlaceholderText('Search exercises'), 'pull');
     fireEvent.press(screen.getByText('Lat pulldown'));
     expect(navigation.navigate).toHaveBeenCalledWith('ProgressDetail', { exerciseName: 'Lat pulldown' });
+  });
+
+  it('uses 16px or larger search text so iPhone Safari does not zoom in', async () => {
+    await renderScreen();
+    const input = await screen.findByPlaceholderText('Search exercises');
+    expect(StyleSheet.flatten(input.props.style).fontSize).toBeGreaterThanOrEqual(16);
   });
 });
