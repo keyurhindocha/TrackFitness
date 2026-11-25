@@ -199,7 +199,9 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 15,
+    // 16 or larger: iPhone Safari zooms the page in on any text box with
+    // smaller text, and the zoom often sticks after the keyboard closes.
+    fontSize: 16,
     paddingVertical: 0,
     outlineStyle: 'none', // web only: hide the browser focus ring
   },
